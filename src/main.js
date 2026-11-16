@@ -46,9 +46,12 @@ const G = {
   buyStep: 0, // buys in a row climb the scale
   lastBuy: 0,
   applySettings() {
-    setVolume(G.state.settings.volume);
-    setNotation(G.state.settings.notation);
+    const st = G.state.settings;
+    setVolume(st.volume);
+    setNotation(st.notation);
+    if (G.renderer && G.renderer.wordScale !== st.words) { G.renderer.wordScale = st.words; G.renderer.measure(); }
   },
+  away: false, // the draft waits because you left the window (Settings → pause when you leave)
 };
 window.game = G;
 
@@ -362,6 +365,8 @@ async function startRun() {
   const seed = (s.seed + s.drafts * 7919) >>> 0;
   G.run = createRun(st, seed);
   G.keys = [];
+  G.away = false;
+  $('#away').hidden = true;
   G.endT = 0;
   G.endDone = false;
   G.summaryShown = false;
@@ -770,13 +775,30 @@ function leaveTitle() {
   }, 450);
 }
 
+/** Leaving the window during a draft pauses it (if the setting is on); a key brings it back. */
+function setAway(on) {
+  if (on === G.away) return;
+  if (on && !(G.screen === 'run' && G.run && !G.run.ended && G.state.settings.autoPause && !G.bot)) return;
+  G.away = on;
+  G.keys.length = 0;
+  $('#away').hidden = !on;
+}
+
 function bindInput() {
+  window.addEventListener('blur', () => setAway(true));
+  document.addEventListener('visibilitychange', () => { if (document.hidden) setAway(true); });
   window.addEventListener('keydown', (e) => {
     if (modalOpen()) return;
     if (G.screen === 'title') { titleKey(e); return; }
     const run = G.run;
     if (G.screen === 'run' && run && !run.ended) {
       if ((e.metaKey || e.ctrlKey) && !(e.ctrlKey && e.altKey)) return; // let shortcuts through (AltGr types symbols)
+      if (G.away) {
+        // back from another window: the first key only wakes the draft up
+        e.preventDefault();
+        if (!['Shift', 'Control', 'Alt', 'Meta', 'CapsLock'].includes(e.key)) setAway(false);
+        return;
+      }
       $('#caps').hidden = !(e.getModifierState && e.getModifierState('CapsLock'));
       if (e.key === 'Tab' || e.key === 'Backspace') { e.preventDefault(); return; }
       if (G.tut && G.tut.gate) {
@@ -830,8 +852,8 @@ function tick(dt) {
   if (G.screen === 'run' && G.run) {
     const run = G.run;
     const s = G.state;
-    if (G.paused) {
-      // test pause: only draw
+    if (G.paused || G.away) {
+      // test pause, or you left the window: only draw
     } else if (G.hitstop > 0) {
       // hit-stop: the page freezes for a blink on a big catch (keys wait in the queue)
       G.hitstop -= dt;
@@ -861,14 +883,17 @@ function tick(dt) {
         if (!G.endBtn && G.inkEnd.t > 1.15) showEndButton();
       }
     }
-    if (!run.ended && run.focus / run.focusMax < 0.25) {
+    if (!run.ended && !G.away && run.focus / run.focusMax < 0.25) {
       G.hbT -= dt;
       if (G.hbT <= 0) { sfx.heartbeat(); G.hbT = 0.85; }
     }
-    G.renderer.draw(G.paused ? 0 : G.hitstop > 0 ? dt * 0.15 : dt, s.settings);
+    G.renderer.draw(G.paused || G.away ? 0 : G.hitstop > 0 ? dt * 0.15 : dt, s.settings);
     updateRunHUD(dt);
   }
 }
+
+/** A blink of freeze on a big catch, unless the player asked for calm effects. */
+function hitstop(t) { if (!G.state.settings.calm) G.hitstop = t; }
 
 function handleEvents(run) {
   const s = G.state;
@@ -895,10 +920,10 @@ function handleEvents(run) {
       }
       case 'catch':
         if (e.splash) sfx.splash();
-        else if (e.gold) { sfx.gold(); G.hitstop = 0.07; }
+        else if (e.gold) { sfx.gold(); hitstop(0.07); }
         else {
           sfx.catch(streakBonus(run) / run.st.streakCap, e.kind);
-          if (e.kind === 'illum') G.hitstop = 0.09;
+          if (e.kind === 'illum') hitstop(0.09);
           if (e.chain >= 2) sfx.chain(e.chain);
         }
         if (++G.hintCatches >= 3 && s.drafts > 0) $('#run-hint').hidden = true;
@@ -909,7 +934,7 @@ function handleEvents(run) {
         }
         break;
       case 'bell': sfx.bell(); break;
-      case 'line': sfx.ret(); G.hitstop = 0.06; break;
+      case 'line': sfx.ret(); hitstop(0.06); break;
       case 'bug': sfx.bug(); break;
       case 'zone': sfx.zone(); document.body.classList.add('zone'); break;
       case 'unzone': document.body.classList.remove('zone'); break;
@@ -942,6 +967,8 @@ function boot() {
       .then(() => { G.renderer.measure(); }).catch(() => {});
   }
   G.renderer = new FieldRenderer($('#run'), $('#page'));
+  G.renderer.wordScale = G.state.settings.words;
+  G.renderer.measure();
   G.renderer.hudTarget = () => {
     const r = $('#hud-ink').getBoundingClientRect();
     return { x: r.left + 12, y: r.top + r.height / 2 };

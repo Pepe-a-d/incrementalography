@@ -24,7 +24,7 @@ export function newState(now = Date.now()) {
     best: Object.fromEntries(ERA_IDS.map((e) => [e, { wpm: 0, ink: 0 }])),
     last: null,
     flags: {},
-    settings: { volume: 0.7, shake: true, notation: 'short' },
+    settings: { volume: 0.7, shake: true, notation: 'short', words: 1, calm: false, autoPause: true },
     lastSave: now,
   };
 }
@@ -355,6 +355,7 @@ export function hydrate(raw, now = Date.now()) {
   s.flags = { ...obj(raw.flags) };
   s.settings = { ...s.settings, ...obj(raw.settings) };
   s.settings.volume = Math.min(1, num(s.settings.volume, 0.7));
+  s.settings.words = Math.min(1.2, Math.max(0.85, num(s.settings.words, 1)));
   s.lastSave = num(raw.lastSave) || now;
   return s;
 }

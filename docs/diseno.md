@@ -135,6 +135,15 @@ Todo se genera en el navegador:
 
 El volumen se ajusta en Ajustes.
 
+## Ajustes
+
+Tres grupos:
+- **screen:** pantalla completa, tamaño de interfaz (solo en la app), tamaño de palabra y formato de los números.
+- **effects:** volumen, temblor de pantalla y efectos tranquilos (`settings.calm`: sin chispas, sin letras volando y sin congelación en las capturas grandes).
+- **play:** pausa al salir de la ventana (`settings.autoPause`, activada por defecto). Si dejas la ventana durante un borrador, se congela con un cartel «paused» y la primera tecla solo lo despierta.
+
+La app de escritorio escala todo para que la ventana se vea como una de 1280×800, por el tamaño de interfaz que elijas.
+
 ## Para probar
 
 - **En desarrollo:** `game.debug.bot(55)` hace que un bot teclee a 55 WPM (`bot(0)` lo quita).

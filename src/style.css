@@ -245,6 +245,10 @@ button:focus-visible, select:focus-visible, input:focus-visible { outline: 1px d
 .hud-sub { display: flex; justify-content: space-between; font-size: 13px; color: var(--muted); margin-top: 3px; }
 #streak-label { color: var(--ink); }
 .run-hint { position: absolute; left: 0; right: 0; top: 100px; margin: 0; text-align: center; z-index: 3; font-style: italic; color: var(--muted); pointer-events: none; animation: blink 2.2s ease-in-out infinite; }
+.away { position: absolute; inset: 0; z-index: 6; display: grid; place-items: center; background: color-mix(in srgb, var(--bg) 55%, transparent); animation: fadein 0.2s; }
+.away .box { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 18px 34px; background: var(--bg); }
+.away b { font: 24px var(--ui); font-weight: normal; text-transform: lowercase; letter-spacing: 0.06em; }
+.away span { font-style: italic; color: var(--muted); }
 .caps { position: absolute; left: 50%; top: 100px; z-index: 4; transform: translateX(-50%); margin: 0; padding: 2px 10px; border-radius: 4px; background: var(--ink); color: var(--bg); font-size: 14px; }
 @keyframes blink { 50% { opacity: 0.45; } }
 
@@ -289,7 +293,13 @@ button:focus-visible, select:focus-visible, input:focus-visible { outline: 1px d
 .setting { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--line); }
 .setting select { font: 15px var(--ui); background: var(--bg); color: var(--ink); border: 1px solid var(--ink); padding: 2px 4px; }
 .setting input[type='range'] { width: 160px; accent-color: var(--ink); }
-.setting input[type='checkbox'] { width: 16px; height: 16px; accent-color: var(--ink); }
+.setting input[type='checkbox'] { width: 16px; height: 16px; accent-color: var(--ink); flex: none; }
+.setting small { display: block; font-size: 13px; font-style: italic; color: var(--muted); }
+.modal.settings { width: min(500px, 100%); }
+.set-h { margin: 16px 0 0; font: 13px var(--ui); text-transform: lowercase; letter-spacing: 0.08em; color: var(--muted); }
+.set-h:first-child { margin-top: 0; }
+.set-keys { margin: 14px 0 0 !important; font-size: 13px; line-height: 1.9; }
+.set-keys kbd { font-size: 12px !important; border-color: var(--muted) !important; border-radius: 3px; }
 
 /* ── Magnum Opus and publishing ───────────────────────────────────────────────────────────────────── */
 .opus { position: fixed; inset: 0; z-index: 35; background: var(--bg); overflow: hidden; display: grid; place-items: center; }

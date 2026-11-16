@@ -101,14 +101,14 @@ export class TreeView {
     this.items.set(n.id, { n, b, shape, nm: b.querySelector('.nm'), ef: b.querySelector('.ef'), badge: b.querySelector('.badge'), key: '' });
   }
 
-  /** Scales the board down when the window is too small for it. */
+  /** Scales the board to the window: down when it does not fit, up (to 135 %) when there is room. */
   fit() {
     const r = this.root.getBoundingClientRect();
     if (!r.width) return;
     this.board.style.transform = 'none';
     const w = this.board.scrollWidth;
     const h = this.board.scrollHeight;
-    const k = Math.min(1, (r.width - 40) / w, (r.height - 84 - 16) / h); // 84: the new draft button under it
+    const k = Math.min(1.35, (r.width - 40) / w, (r.height - 84 - 16) / h); // 84: the new draft button under it; a little bigger when there is room
     this.board.style.transform = `scale(${k.toFixed(3)})`;
   }
 

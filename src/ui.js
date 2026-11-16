@@ -1,4 +1,4 @@
-// Interface pieces: toasts, dialogs and settings (volume, shake, numbers, export, import, delete).
+// Interface pieces: toasts, dialogs and settings (screen, effects, play, export, import, delete).
 
 const $ = (sel, root = document) => root.querySelector(sel);
 
@@ -82,25 +82,80 @@ export function modal({ title, body, actions = [{ id: 'ok', label: 'OK', primary
 
 // ── Settings and saves ─────────────────────────────────────────────────────
 
+const DESK = typeof window !== 'undefined' ? window.desktop : null; // the desktop app (electron/preload.cjs), or null in a browser
+const MOD = DESK?.platform === 'darwin' || /Mac/.test(navigator.platform || '') ? '⌘' : 'Ctrl';
+let onDeskPrefs = null; // the open settings dialog follows F11 and Ctrl +/− while it's open
+DESK?.onPrefs((p) => onDeskPrefs?.(p));
+
+/** Full screen: the app window in the desktop app, the page in a browser. */
+export function isFullScreen() { return !!document.fullscreenElement; }
+export async function setFullScreen(on) {
+  if (DESK) return DESK.setFullScreen(on);
+  try {
+    if (on && !document.fullscreenElement) await document.documentElement.requestFullscreen();
+    else if (!on && document.fullscreenElement) await document.exitFullscreen();
+  } catch { /* the browser said no */ }
+}
+
 export async function settingsDialog(G) {
   const s = G.state;
+  const prefs = DESK ? await DESK.getPrefs().catch(() => null) : null;
+  const sizes = prefs?.scales || [];
+  const opt = (v, label) => `<option value="${v}">${label}</option>`;
   await modal({
     title: 'Settings',
-    body: `<label class="setting"><span>Volume</span><input type="range" min="0" max="1" step="0.05" data-k="volume"></label>
+    cls: 'settings',
+    body: `<h3 class="set-h">screen</h3>
+      <label class="setting"><span>Full screen</span><input type="checkbox" data-k="full"></label>
+      ${DESK ? `<label class="setting"><span>Interface size</span><select data-k="scale">${sizes.map((v) => opt(v, `${Math.round(v * 100)}%`)).join('')}</select></label>` : ''}
+      <label class="setting"><span>Word size</span><select data-k="words">${opt('0.85', 'small')}${opt('1', 'normal')}${opt('1.2', 'large')}</select></label>
+      <label class="setting"><span>Numbers</span><select data-k="notation">${opt('short', '1.23 M')}${opt('sci', '1.23e6')}</select></label>
+      <h3 class="set-h">effects</h3>
+      <label class="setting"><span>Volume</span><input type="range" min="0" max="1" step="0.05" data-k="volume"></label>
       <label class="setting"><span>Screen shake</span><input type="checkbox" data-k="shake"></label>
-      <label class="setting"><span>Numbers</span><select data-k="notation"><option value="short">1.23 M</option><option value="sci">1.23e6</option></select></label>
-      <p class="muted">Your game saves on its own in this browser.</p>`,
+      <label class="setting"><span>Calm effects<small>fewer particles, no freeze on big catches</small></span><input type="checkbox" data-k="calm"></label>
+      <h3 class="set-h">play</h3>
+      <label class="setting"><span>Pause when you leave<small>a draft waits if you switch windows</small></span><input type="checkbox" data-k="autoPause"></label>
+      <p class="muted set-keys">${DESK
+        ? `<kbd>F11</kbd> full screen · <kbd>${MOD} +</kbd> <kbd>${MOD} −</kbd> interface size · <kbd>${MOD} 0</kbd> normal size`
+        : `<kbd>F11</kbd> full screen · <kbd>${MOD} +</kbd> <kbd>${MOD} −</kbd> zoom the page`}<br>Your game saves on its own${DESK ? '.' : ' in this browser.'}</p>`,
     onOpen: (card) => {
-      const vol = card.querySelector('[data-k="volume"]');
+      const q = (k) => card.querySelector(`[data-k="${k}"]`);
+      const vol = q('volume');
       vol.value = s.settings.volume;
       vol.addEventListener('input', () => { s.settings.volume = Number(vol.value); G.applySettings(); });
       vol.addEventListener('change', () => { G.save(); G.sfx.key(s.era); });
-      const shake = card.querySelector('[data-k="shake"]');
-      shake.checked = !!s.settings.shake;
-      shake.addEventListener('change', () => { s.settings.shake = shake.checked; G.save(); });
-      const nota = card.querySelector('[data-k="notation"]');
+      const check = (k) => {
+        const c = q(k);
+        c.checked = !!s.settings[k];
+        c.addEventListener('change', () => { s.settings[k] = c.checked; G.applySettings(); G.save(); });
+      };
+      check('shake');
+      check('calm');
+      check('autoPause');
+      const nota = q('notation');
       nota.value = s.settings.notation || 'short';
       nota.addEventListener('change', () => { s.settings.notation = nota.value; G.applySettings(); G.save(); G.refresh(); });
+      const words = q('words');
+      words.value = String(s.settings.words || 1);
+      if (!words.value) words.value = '1';
+      words.addEventListener('change', () => { s.settings.words = Number(words.value); G.applySettings(); G.save(); });
+      const full = q('full');
+      full.checked = prefs ? !!prefs.fullscreen : isFullScreen();
+      full.addEventListener('change', () => setFullScreen(full.checked));
+      if (!DESK) {
+        const sync = () => {
+          if (!card.isConnected) { document.removeEventListener('fullscreenchange', sync); return; }
+          full.checked = isFullScreen();
+        };
+        document.addEventListener('fullscreenchange', sync);
+      } else {
+        onDeskPrefs = (p) => { if (!card.isConnected) return; full.checked = !!p.fullscreen; q('scale').value = String(p.scale); };
+        const sc = q('scale');
+        sc.value = String(prefs?.scale ?? 1);
+        if (!sc.value) sc.value = '1';
+        sc.addEventListener('change', () => DESK.setScale(Number(sc.value)));
+      }
       card.querySelector('.btn.primary')?.focus();
     },
     actions: [

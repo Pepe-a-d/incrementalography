@@ -366,3 +366,16 @@ Lo pediste porque las mejoras seguían costando de reconocer:
   - Página https://pepe-a-d.github.io/incrementalography/, con el juego para el navegador en `/play/`.
   - Instaladores en la release v1.0.0.
   - Un push a main vuelve a publicar la página. Para una versión nueva: subir `version` en package.json y `npm run release`.
+
+## Versión 1.0.1 (16-11-2026): pantallas grandes y más ajustes
+
+Lo pediste después de probar la app en Windows: el árbol ocupaba una cuarta parte de la pantalla, no había pantalla completa a la vista y había pocos ajustes.
+
+- **Escala:** la app amplía todo el juego para que llene la ventana como llena una de 1280×800 (nunca lo encoge). En 1920×1080 eso es ×1,35. Además, el árbol crece hasta un 135 % cuando le sobra sitio, también en el navegador.
+- **Pantalla completa:** casilla en Ajustes y F11. La app la recuerda, y también si la ventana estaba maximizada; arranca maximizada.
+- **Ajustes nuevos**, en tres grupos (screen, effects, play):
+  - Tamaño de interfaz (80–150 %, solo en la app; también con Ctrl/⌘ + y −).
+  - Tamaño de palabra (small, normal, large).
+  - Efectos tranquilos: sin chispas ni letras que salen volando, una sola gota y sin la congelación en las capturas grandes.
+  - Pausa al salir de la ventana (activada por defecto): el borrador espera con un cartel «paused» y sigue con cualquier tecla, que no cuenta como pulsación.
+- **Probado:** en la app (escala, tamaño de interfaz, Ajustes y pausa) y en el navegador (palabras grandes, efectos tranquilos y pausa). La pantalla completa de la app no se probó para no ocupar tu pantalla.

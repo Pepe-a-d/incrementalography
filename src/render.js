@@ -73,7 +73,8 @@ export class FieldRenderer {
     ctx.font = `100px ${e.font}`;
     const sample = 'etaoinshrdlucmfwyp';
     const ratio = (ctx.measureText(sample).width || sample.length * 55) / sample.length / 100;
-    this.fontPx = Math.max(14, Math.min(this.laneH * 0.6, (CHAR_W * this.sx) / ratio));
+    const fit = Math.min(this.laneH * 0.6, (CHAR_W * this.sx) / ratio);
+    this.fontPx = Math.max(12, Math.min(this.laneH * 0.75, fit * (this.wordScale || 1))); // × the player's word size
     this.font = e.font;
   }
 
@@ -129,7 +130,7 @@ export class FieldRenderer {
       const size = this.fontPx * (w.kind === 'illum' ? ILLUM_SCALE : 1);
       const x = this.wx(w.x) + this.letterX(w.text, size, e.i) + size * 0.25;
       const y = this.ly(w.lane);
-      this.keySpark(x, y, size);
+      if (!settings.calm) this.keySpark(x, y, size);
     } else if (e.type === 'catch') {
       const size = this.fontPx * (e.kind === 'illum' ? ILLUM_SCALE : 1);
       const x = this.wx(e.x);
@@ -139,7 +140,7 @@ export class FieldRenderer {
       const ctx = this.ctx;
       ctx.font = `${Math.round(size)}px ${this.font}`;
       const burst = e.gold || e.kind === 'illum' ? 1.6 : 1;
-      for (let i = 0; i < e.text.length; i++) {
+      for (let i = 0; i < (settings.calm ? 0 : e.text.length); i++) {
         if (e.text[i] === ' ') continue;
         const lx = x + ctx.measureText(e.text.slice(0, i)).width;
         const a = -Math.PI / 2 + (Math.random() - 0.5) * 2.2;
@@ -154,7 +155,7 @@ export class FieldRenderer {
       const label = e.kind === 'illum' ? 'Illuminated!' : e.gold ? 'Golden!' : e.bugged ? 'Debugged!' : e.faint ? 'Foresight ×2' : e.splash ? 'Splash!'
         : e.chain >= 3 ? `Chain ×${e.chain}` : e.perfect && e.long ? 'Perfect' : '';
       if (label) this.float(x + 6, y + size * 0.9, label, e.gold ? th.gold : e.chain >= 3 ? th.gold : th.typed, 0.95, true);
-      const n = e.gold ? 14 : e.kind === 'illum' ? 16 : 5;
+      const n = settings.calm ? 1 : e.gold ? 14 : e.kind === 'illum' ? 16 : 5;
       for (let i = 0; i < n; i++) this.drop(x + Math.random() * 30, y - size * 0.3, e.gold ? th.gold : color);
       if ((e.gold || e.kind === 'illum') && settings.shake) this.shake(5, 0.2);
       else if (e.chain >= 5 && settings.shake) this.shake(2.5, 0.1);

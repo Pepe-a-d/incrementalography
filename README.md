@@ -57,7 +57,8 @@ Opciones del simulador: `node sim/balance.mjs <min> <wpm,…>`, más `SEEDS=2`, 
 | `src/ui.js` | Avisos, ventanas, ajustes, exportar, importar y borrar |
 | `src/audio.js` | Sonidos de cada era con WebAudio |
 | `src/tutorial.js` | Primer draft guiado y el primer draft de cada era nueva |
-| `electron/main.cjs` | La app de escritorio: ventana, protocolo `app://`, pantalla completa con F11 y menú mínimo en el Mac |
+| `electron/main.cjs` | La app de escritorio: ventana, protocolo `app://`, menú mínimo en el Mac. Escala el juego al tamaño de la ventana (diseñado para 1280×800) por el tamaño de interfaz elegido, y recuerda pantalla completa, ventana maximizada y tamaño en `prefs.json` de su carpeta de datos. F11 pone la pantalla completa; Ctrl/⌘ + y − cambian el tamaño, y Ctrl/⌘ 0 lo devuelve al normal |
+| `electron/preload.cjs` | Lo que el juego puede pedir a la app (`window.desktop`): pantalla completa y tamaño de interfaz, para los Ajustes |
 | `src/main.js` | Pantalla de título, pantallas, bucle, teclado, HUD, resumen, publicar, desafíos y Magnum Opus |
 
 Diseño: `docs/diseno.md`. Plan, cambios y ritmo medido: `docs/plan-incrementalography.md`.
