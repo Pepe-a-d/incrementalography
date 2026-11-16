@@ -43,7 +43,7 @@
     .keys { display: flex; gap: 22px; justify-content: center; flex-wrap: wrap; margin: 44px 0 0; }
     .key {
       position: relative; display: inline-flex; flex-direction: column; align-items: center; gap: 6px; padding: 16px 28px; min-width: 190px;
-      border: 1.5px solid var(--ink); border-radius: 7px; text-decoration: none; overflow: hidden; isolation: isolate; cursor: pointer;
+      border: 1.5px solid var(--ink); border-radius: 7px; overflow: hidden; isolation: isolate; cursor: default; user-select: none; -webkit-user-select: none;
     }
     .key .fill { position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: var(--panel); z-index: -1; transition: width 0.12s ease-out; }
     .key .word { font: 32px/1 var(--book); letter-spacing: 0.03em; }
@@ -52,11 +52,18 @@
     .key .ch.done { color: var(--ink); text-decoration: underline; text-underline-offset: 5px; text-decoration-thickness: 1.5px; }
     .key.mine { border-width: 2.5px; }
     .key.mine::after { content: 'your system'; position: absolute; top: 5px; right: 8px; font: italic 11px var(--ui); color: var(--muted); }
-    .key:hover .word .ch { color: var(--muted); }
     .key.full { background: var(--ink); }
     .key.full .ch, .key.full::after { color: var(--bg); }
     .key.full .fill { display: none; }
     .key.nope { animation: nope 0.3s; }
+    /* the same, as a word inside a sentence (the portable version, in the footer) */
+    .key.inline { display: inline; padding: 0; min-width: 0; border: 0; border-radius: 0; overflow: visible; }
+    .key.inline .fill { display: none; }
+    .key.inline .word { font: 17px var(--book); letter-spacing: 0; }
+    .key.inline .ch { color: var(--muted); }
+    .key.inline .ch.next { color: var(--ink); }
+    .key.inline.full { background: none; }
+    .key.inline.full .ch { color: var(--ink); }
     @keyframes nope { 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
     .hint { margin: 22px 0 0; font: italic 15px var(--ui); color: var(--muted); min-height: 1.5em; }
     .hint b { color: var(--ink); font-weight: normal; font-style: normal; font-family: var(--book); font-size: 17px; }
@@ -115,8 +122,8 @@
     <div class="center">
       <h1 class="title"><span id="title" aria-label="incrementalography"></span><i class="caret" aria-hidden="true"></i></h1>
       <div class="keys" id="keys">
-        <a class="key" id="key-mac" data-word="mac" href="#" data-file="Incrementalography-Mac.dmg"><span class="fill"></span><span class="word"></span></a>
-        <a class="key" id="key-windows" data-word="windows" href="#" data-file="Incrementalography-Setup-Windows.exe"><span class="fill"></span><span class="word"></span></a>
+        <div class="key" id="key-mac" data-word="mac" data-file="Incrementalography-Mac.dmg"><span class="fill"></span><span class="word"></span></div>
+        <div class="key" id="key-windows" data-word="windows" data-file="Incrementalography-Setup-Windows.exe"><span class="fill"></span><span class="word"></span></div>
       </div>
       <p class="hint" id="hint">type <b>mac</b> or <b>windows</b> to download</p>
     </div>
@@ -157,7 +164,7 @@
 
     <footer>
       <span>Incrementalography 1.0 · free · works offline</span>
-      <span>no installer? <a id="portable" href="#">Windows portable</a> · <a href="play/">play in your browser</a></span>
+      <span>no installer? type <span class="key inline" id="key-portable" data-word="portable" data-file="Incrementalography-Portable-Windows.exe"><span class="fill"></span><span class="word"></span></span> · <a href="play/">play in your browser</a></span>
     </footer>
   </main>
 
@@ -169,11 +176,10 @@
     const $ = (s) => document.querySelector(s);
     const keys = [...document.querySelectorAll('.key')];
     for (const k of keys) {
-      k.href = DOWNLOADS + k.dataset.file;
+      k.dataset.url = DOWNLOADS + k.dataset.file;
       k.querySelector('.word').innerHTML = [...k.dataset.word].map((c) => `<span class="ch">${c}</span>`).join('');
       k.typed = 0;
     }
-    $('#portable').href = DOWNLOADS + 'Incrementalography-Portable-Windows.exe';
 
     // your system goes first
     const plat = ((navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || navigator.userAgent || '').toLowerCase();
@@ -203,7 +209,7 @@
     function download(k) {
       k.classList.add('full');
       const word = k.dataset.word;
-      $('#hint').innerHTML = `downloading for <b>${word}</b>…`;
+      $('#hint').innerHTML = word === 'portable' ? 'downloading the <b>portable</b> version for Windows…' : `downloading for <b>${word}</b>…`;
     }
     // typing the word downloads it, like typing «begin» starts the game
     window.addEventListener('keydown', (e) => {
@@ -218,14 +224,12 @@
         if (target.typed === target.dataset.word.length) {
           const k = target;
           target = null;
-          setTimeout(() => { download(k); if (!PREVIEW) location.href = k.href; }, 220);
+          setTimeout(() => { download(k); if (!PREVIEW) location.href = k.dataset.url; }, 220);
           setTimeout(() => { k.typed = 0; k.classList.remove('full'); paint(k); }, 2600);
         }
       } else reset(true);
     });
-    // a click downloads too
-    for (const k of keys) k.addEventListener('click', (e) => {
-      if (PREVIEW) e.preventDefault(); k.typed = k.dataset.word.length; paint(k); download(k); setTimeout(() => { k.typed = 0; k.classList.remove('full'); paint(k); }, 2600); });
+    // only the keyboard downloads: clicking a word does nothing
 
     // the title writes itself, with the uneven rhythm of a person typing
     const T = 'incrementalography';
