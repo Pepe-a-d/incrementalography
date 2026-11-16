@@ -33,7 +33,7 @@ npm run site       # la página en http://localhost:5199 (en local no descarga n
 npm run release    # compila los instaladores y los sube a GitHub Releases (sube antes la versión en package.json)
 ```
 
-- **Cómo es:** la pantalla de título del juego. El título se escribe solo, pasan palabras de las cuatro eras y hay dos palabras para teclear: «mac» o «windows». Al completarla empieza la descarga (con clic también) y aparecen los pasos para abrirla la primera vez.
+- **Cómo es:** la pantalla de título del juego. El título se escribe solo, pasan palabras de las cuatro eras y hay dos palabras para teclear: «mac» o «windows». Al completarla empieza la descarga (con clic también).
 - **Debajo:**
   - Qué es el juego, en tres ideas.
   - Las cuatro eras, cada una con su letra.
