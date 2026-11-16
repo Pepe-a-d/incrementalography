@@ -111,7 +111,8 @@ export async function settingsDialog(G) {
       <label class="setting"><span>Word size</span><select data-k="words">${opt('0.85', 'small')}${opt('1', 'normal')}${opt('1.2', 'large')}</select></label>
       <label class="setting"><span>Numbers</span><select data-k="notation">${opt('short', '1.23 M')}${opt('sci', '1.23e6')}</select></label>
       <h3 class="set-h">effects</h3>
-      <label class="setting"><span>Volume</span><input type="range" min="0" max="1" step="0.05" data-k="volume"></label>
+      <label class="setting"><span>Sounds</span><input type="range" min="0" max="1" step="0.05" data-k="volume"></label>
+      <label class="setting"><span>Music<small>in the boss fights</small></span><input type="range" min="0" max="1" step="0.05" data-k="music"></label>
       <label class="setting"><span>Screen shake</span><input type="checkbox" data-k="shake"></label>
       <label class="setting"><span>Calm effects<small>fewer particles, no freeze on big catches</small></span><input type="checkbox" data-k="calm"></label>
       <h3 class="set-h">play</h3>
@@ -125,6 +126,10 @@ export async function settingsDialog(G) {
       vol.value = s.settings.volume;
       vol.addEventListener('input', () => { s.settings.volume = Number(vol.value); G.applySettings(); });
       vol.addEventListener('change', () => { G.save(); G.sfx.key(s.era); });
+      const mus = q('music');
+      mus.value = s.settings.music ?? 0.6;
+      mus.addEventListener('input', () => { s.settings.music = Number(mus.value); G.applySettings(); });
+      mus.addEventListener('change', () => G.save());
       const check = (k) => {
         const c = q(k);
         c.checked = !!s.settings[k];

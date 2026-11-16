@@ -58,6 +58,9 @@ export function createRun(st, seed) {
     splashes: 0,
     steadyLeft: st.steady,
     page: [],
+    pageT: 0, // Full Page (Typewriter): seconds left of ×2 ink
+    carbons: 0,
+    novas: 0,
     speedBase: FW / st.crossTime,
   };
   // Something to type right away: a few words already on the page
@@ -204,6 +207,7 @@ export function wordValue(run, w) {
   if (w.phrase) v *= st.phraseMult;
   if (w.bugged) v *= st.bugMult;
   if (faintness(run, w) > 0.25) v *= st.faintMult;
+  if (run.pageT > 0) v *= st.pageMult;
   v *= (1 + streakBonus(run)) * (run.zone ? st.zoneMult : 1);
   return v;
 }
@@ -216,7 +220,12 @@ function catchWord(run, w, splash = false) {
     run.lastCatchT = run.t;
     if (run.chain > run.bestChain) run.bestChain = run.chain;
   }
-  const v = wordValue(run, w) * (1 + chainBonus(run));
+  let v = wordValue(run, w) * (1 + chainBonus(run));
+  // Carbon Copy (Typewriter): some words count twice. Nova (Future): every Nth word is worth ×5.
+  const carbon = !splash && st.carbon > 0 && run.rng() < st.carbon;
+  if (carbon) { v *= 2; run.carbons += 1; }
+  const nova = !splash && st.nova && (run.caught + 1) % st.novaEvery === 0;
+  if (nova) { v *= st.novaMult; run.novas += 1; }
   w.caught = true;
   run.ink += v;
   run.caught += 1;
@@ -240,7 +249,7 @@ function catchWord(run, w, splash = false) {
   }
   run.page.push(w.text);
   if (run.page.length > 40) run.page.shift();
-  run.events.push({ type: 'catch', id: w.id, text: w.text, x: w.x, lane: w.lane, kind: w.kind, amount: v, gold: w.gold, theme: w.theme, bugged: w.bugged, faint, perfect: w.errors === 0, focus, chain: splash ? 0 : run.chain, splash, long: w.text.length >= st.longLen });
+  run.events.push({ type: 'catch', id: w.id, text: w.text, x: w.x, lane: w.lane, kind: w.kind, amount: v, gold: w.gold, theme: w.theme, bugged: w.bugged, faint, perfect: w.errors === 0, focus, chain: splash ? 0 : run.chain, splash, long: w.text.length >= st.longLen, carbon, nova });
   // Ink Splash: the word splashes onto the nearest short word and catches it too
   if (!splash && st.splash && run.rng() < st.splash) {
     let best = null;
@@ -265,6 +274,7 @@ function lineBonus(run) {
   run.lines += 1;
   const focus = addFocus(run, st.lineFocus);
   run.events.push({ type: 'line', amount: bonus, focus });
+  if (st.page && run.lines % st.pageEvery === 0) { run.pageT = st.pageTime; run.events.push({ type: 'page' }); }
   run.line = { count: 0, ink: 0, bell: 0 };
 }
 
@@ -359,6 +369,8 @@ export function stepRun(run, dt, keys = []) {
     if (run.bugT <= 0) { spawnBug(run); run.bugT = st.bugEvery * (0.7 + 0.6 * run.rng()); }
     stepBugs(run, dt);
   }
+
+  if (run.pageT > 0) run.pageT = Math.max(0, run.pageT - dt);
 
   if (run.line.bell > 0 && !run.freezeBell) {
     run.line.bell -= dt;

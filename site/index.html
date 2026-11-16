@@ -8,7 +8,7 @@
   <meta name="theme-color" content="#FFFFFF" />
   <link rel="icon" href="favicon.svg" type="image/svg+xml" />
   <meta property="og:title" content="Incrementalography" />
-  <meta property="og:description" content="A typing incremental: catch the words, fill the inkwell, publish your books." />
+  <meta property="og:description" content="A typing incremental: catch the words, fill the inkwell, and write the book of each era." />
   <meta property="og:image" content="icon.png" />
   <style>
     /* The download page is the game's title screen: black ink on white paper, the title typing itself out,
@@ -87,11 +87,20 @@
     .eras p { margin: 0; font-size: 14px; color: #555; }
     .eras .scriptorium b { font-family: var(--book); }
     .eras .typewriter b { font-family: 'Courier Prime', monospace; font-size: 24px; }
-    .eras .computer, .eras .future { background: #000; color: #fff; }
-    .eras .computer p, .eras .future p { color: #9a9a9a; }
+    /* each era in its own material, as in the game */
+    .eras .scriptorium { background: #F1E6CC; color: #2B1D14; }
+    .eras .scriptorium p { color: #6E5C42; }
+    .eras .typewriter { background: #2B2522; color: #EFE6D2; }
+    .eras .typewriter p { color: #A89C88; }
+    .eras .computer { background: #040A05; color: #3CFF73; }
+    .eras .computer p { color: #23A04F; }
+    .eras .future { background: #0A0A1C; color: #E8E6FF; }
+    .eras .future p { color: #8584B8; }
+    .eras .future b { color: #5EF2FF; }
+    .eras .n { color: inherit !important; opacity: 0.6; }
+    .eras div + div { border-left-color: rgba(0, 0, 0, 0.4) !important; }
     .eras .computer b { font-family: 'IBM Plex Mono', monospace; font-size: 22px; }
     .eras .future b { font-family: 'Space Grotesk', sans-serif; font-weight: 500; font-size: 24px; }
-    .eras .future { border-left-color: #1e1e1e !important; }
 
     /* screenshots of the real game, on paper */
     .shots { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 26px; padding: 70px 0 10px; }
@@ -140,30 +149,30 @@
       <div>
         <div class="icon"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7.502 19.423c2.602 2.105 6.395 2.105 8.996 0c2.602 -2.105 3.262 -5.708 1.566 -8.546l-4.89 -7.26c-.42 -.625 -1.287 -.803 -1.936 -.397a1.376 1.376 0 0 0 -.41 .397l-4.893 7.26c-1.695 2.838 -1.035 6.441 1.567 8.546z" /></svg></div>
         <h2>fill the inkwell</h2>
-        <p>Every word is ink. Spend it on upgrades that fill columns of ink: more ink, more focus, longer streaks.</p>
+        <p>Every word is ink. Each era has its own tree of ten upgrades, and every one of them makes the next draft better.</p>
       </div>
       <div>
         <div class="icon"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 20h-8a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h12v5" /><path d="M11 16h-5a2 2 0 0 0 -2 2" /><path d="M15 16l3 -3l3 3" /><path d="M18 13v9" /></svg></div>
-        <h2>publish your books</h2>
-        <p>Publish to earn fame, and fame opens new eras. Then the Magnum Opus, and challenges with no end.</p>
+        <h2>write the book</h2>
+        <p>Buy the whole tree and the era's book opens: a boss with its own rules and its own music. Write it to reach the next era.</p>
       </div>
     </section>
 
     <section class="eras" aria-label="the four eras">
-      <div class="scriptorium"><span class="n">i</span><b>scriptorium</b><p>Illuminated words, slow and worth four times the ink.</p></div>
-      <div class="typewriter"><span class="n">ii</span><b>Typewriter</b><p>Capitals and punctuation. The bell rings: hit Enter.</p></div>
-      <div class="computer"><span class="n">iii</span><b>computer_</b><p>Bugs crawl into words and sw@p letters for symb0ls.</p></div>
-      <div class="future"><span class="n">iv</span><b>Future</b><p>Whole phrases, arriving faint. Catch them early.</p></div>
+      <div class="scriptorium"><span class="n">i</span><b>scriptorium</b><p>Illuminated words by candlelight. The book: the Abbot dictates, you copy.</p></div>
+      <div class="typewriter"><span class="n">ii</span><b>Typewriter</b><p>Capitals, punctuation and the bell. The book: the front page, before the press.</p></div>
+      <div class="computer"><span class="n">iii</span><b>computer_</b><p>Bugs sw@p letters for symb0ls. The book: a worm that eats your files.</p></div>
+      <div class="future"><span class="n">iv</span><b>Future</b><p>Whole phrases, arriving faint. The book: a machine that writes against you.</p></div>
     </section>
 
     <section class="shots">
-      <figure><img src="shots/draft.png" alt="A draft: words crossing a ruled page, one being typed" loading="lazy" width="1280" height="788" /><figcaption>the page <i>— a draft lasts as long as your focus</i></figcaption></figure>
-      <figure><img src="shots/tree.png" alt="The upgrades: columns filling with ink from the inkwell" loading="lazy" width="1280" height="788" /><figcaption>the inkwell <i>— columns that fill with ink</i></figcaption></figure>
-      <figure><img src="shots/end.png" alt="The end of a draft: the page covered in ink, the results left clean" loading="lazy" width="1280" height="788" /><figcaption>the end of a draft <i>— the ink spills, the results stay clean</i></figcaption></figure>
+      <figure><img src="shots/draft.png" alt="A draft: words crossing a ruled page, one being typed" loading="lazy" width="1280" height="776" /><figcaption>the page <i>— a draft lasts as long as your candle</i></figcaption></figure>
+      <figure><img src="shots/tree.png" alt="The Typewriter era's upgrades: typewriter keys on a dark desk, and the book above them" loading="lazy" width="1280" height="776" /><figcaption>the typewriter's tree <i>— ten keys, then the book</i></figcaption></figure>
+      <figure><img src="shots/boss.png" alt="A boss fight: the Worm, pieces of code snaking down a green terminal towards your files" loading="lazy" width="1280" height="776" /><figcaption>the worm <i>— the computer era's book</i></figcaption></figure>
     </section>
 
     <footer>
-      <span>Incrementalography 1.0 · free · works offline</span>
+      <span>Incrementalography 2.0 · free · works offline</span>
       <span>no installer? type <span class="key inline" id="key-portable" data-word="portable" data-file="Incrementalography-Portable-Windows.exe"><span class="fill"></span><span class="word"></span></span> · <a href="play/">play in your browser</a></span>
     </footer>
   </main>

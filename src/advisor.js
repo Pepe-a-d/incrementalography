@@ -3,9 +3,8 @@
 // with and without the next level of each upgrade, on the same seeds so only the upgrade differs.
 // It runs in small chunks so the screen never freezes, and remembers results until something changes.
 
-import { computeStats, INK, FAME } from './game.js';
+import { computeStats, treeOf } from './game.js';
 import { createRun, stepRun, botKeys, mulberry32 } from './run.js';
-import { ERAS, BASE } from './data.js';
 
 const SEEDS = 8;
 const DT = 1 / 30;
@@ -34,13 +33,6 @@ function meanInk(s, prof) {
   return t / SEEDS;
 }
 
-/** What a node does, in words, when a draft can't measure it. */
-function textOnly(s, n, tree) {
-  if (n.id.startsWith('master_')) return 'Fame +50% when you publish';
-  if (n.era && n.era !== s.era && !n.allEras) return `Works in the ${ERAS[n.era].name} era`; // the allEras ones count everywhere
-  if (tree === 'fame' && !(n.eff.value || n.eff.start || n.eff.focus)) return n.short; // what a draft can't measure
-  return null;
-}
 
 export class Advisor {
   constructor() {
@@ -58,20 +50,13 @@ export class Advisor {
   /** Starts (or keeps) the estimates for the current state. */
   request(s) {
     const prof = profile(s);
-    const key = JSON.stringify([s.levels, s.fameLv, s.era, s.cycle.chal, s.chal, Math.round(prof.wpm / 3), Math.round(prof.err * 50)]);
+    const key = JSON.stringify([s.levels, s.era, s.trophies, s.edition, Math.round(prof.wpm / 3), Math.round(prof.err * 50)]);
     if (key === this.key) return;
     this.key = key;
     clearTimeout(this.timer);
     const snap = structuredClone(s);
-    const todo = [];
-    for (const n of INK.nodes) {
-      const st = INK.status(snap, n);
-      if (st === 'buy' || st === 'poor' || st === 'locked') todo.push({ n, tree: 'ink' });
-    }
-    for (const n of FAME.nodes) {
-      const st = FAME.status(snap, n);
-      if (st === 'buy' || st === 'poor') todo.push({ n, tree: 'fame' });
-    }
+    const T = treeOf(snap);
+    const todo = T.nodes.filter((n) => { const st = T.status(snap, n); return st === 'buy' || st === 'poor'; });
     const map = new Map();
     let base = null;
     let i = 0;
@@ -80,19 +65,17 @@ export class Advisor {
       const t0 = performance.now();
       if (base === null) base = meanInk(snap, prof);
       while (i < todo.length && performance.now() - t0 < 12) {
-        const { n, tree } = todo[i++];
-        const text = textOnly(snap, n, tree);
-        if (text) { map.set(n.id, { gain: 0, text }); continue; }
-        if (n.id === 'gild') {
-          // golden words are too rare for a few drafts to see: work it out (×5 words, 1% more of them)
-          const p = computeStats(snap).gold;
-          const m = BASE.goldMult - 1;
-          map.set(n.id, { gain: (1 + m * (p + 0.01)) / (1 + m * p) - 1, text: null });
+        const n = todo[i++];
+        if (n.id === 'goldleaf') {
+          // golden words are too rare for a few drafts to see: work it out (3% of words ×5 → 6% of words ×15)
+          const st = computeStats(snap);
+          const before = 1 + (st.goldMult - 1) * st.gold;
+          const after = 1 + (st.goldMult * 3 - 1) * st.gold * 2;
+          map.set(n.id, { gain: after / before - 1, text: null });
           continue;
         }
         const next = structuredClone(snap);
-        if (tree === 'ink') next.levels[n.id] = (next.levels[n.id] || 0) + 1;
-        else next.fameLv[n.id] = (next.fameLv[n.id] || 0) + 1;
+        next.levels[n.id] = 1;
         const gain = base > 0 ? meanInk(next, prof) / base - 1 : 0;
         map.set(n.id, { gain, text: null });
       }
@@ -109,11 +92,12 @@ export class Advisor {
 function pickBest(s, map) {
   let best = null;
   let bestScore = 0;
-  for (const n of INK.nodes) {
+  const T = treeOf(s);
+  for (const n of T.nodes) {
     const a = map.get(n.id);
-    const st = INK.status(s, n);
+    const st = T.status(s, n);
     if (!a || a.gain < 0.01 || (st !== 'buy' && st !== 'poor')) continue;
-    const score = a.gain / INK.cost(s, n);
+    const score = a.gain / T.cost(s, n);
     if (score > bestScore) { bestScore = score; best = n.id; }
   }
   return best;

@@ -3,16 +3,16 @@
 // for the next one, the ink climbs towards it. Each column has one shape (circle ink, square focus, diamond streak,
 // octagon eras, pentagon fame), so a glance tells them apart. The next upgrade of a column is shown
 // in full; the ones above it are only outlines until you get there. A column that hasn't opened yet is a dashed '?'.
-// Works for both trees: new TreeView(root, { tree: INK | FAME, currency, columns, onBuy, advisor }).
+// One per era: new TreeView(root, { tree, currency, columns, onBuy, advisor, book }). book: the era's boss, a node above
+// every column that opens once all the upgrades are bought ({ era, onClick }).
 
-import { COLUMNS } from './data.js';
+import { COLUMNS, ERAS } from './data.js';
 import { fmt } from './format.js';
 import { fmtGain } from './advisor.js';
 import { icon, ICONS } from './icons.js';
 
 const ROW = 118; // px between upgrades in a column
 const COL_W = 150; // px per column
-const ERA_NAME = { scriptorium: 'the Scriptorium', typewriter: 'the Typewriter era', computer: 'the Computer era', future: 'the Future era' };
 
 // shapes in a 48×48 box
 export const SHAPE_PATH = {
@@ -36,7 +36,7 @@ const shapeSVG = (shape, iconName) => `<svg class="shp" viewBox="0 0 48 48" aria
 </svg>`;
 
 export class TreeView {
-  constructor(root, { tree, currency, columns, onBuy, advisor }) {
+  constructor(root, { tree, currency, columns, onBuy, advisor, book = null }) {
     this.root = root;
     this.tree = tree;
     this.currency = currency; // 'ink' | 'fame'
@@ -51,6 +51,18 @@ export class TreeView {
     this.board = document.createElement('div');
     this.board.className = 'cols-board';
     root.append(this.board);
+    // the book: above every column, the goal of the era
+    if (book) {
+      this.book = book;
+      const b = ERAS[book.era].boss;
+      this.bookEl = document.createElement('button');
+      this.bookEl.type = 'button';
+      this.bookEl.className = 'book-node';
+      this.bookEl.innerHTML = `<span class="bk-ic">${icon(b.icon)}</span><span class="bk-t"><b class="bk-n"></b><i class="bk-s"></i></span>`;
+      this.bookEl.querySelector('.bk-n').textContent = b.name;
+      this.bookEl.addEventListener('click', () => { if (this.bookEl.classList.contains('ready')) book.onClick(); });
+      this.board.append(this.bookEl);
+    }
     this.colsEl = document.createElement('div');
     this.colsEl.className = 'cols';
     this.board.append(this.colsEl);
@@ -80,8 +92,25 @@ export class TreeView {
     this.card.className = 'node-card box';
     this.card.hidden = true;
     root.append(this.card);
-    new ResizeObserver(() => this.fit()).observe(root);
-    if (advisor) advisor.onUpdate(() => { if (this.state) { this.paintAdvice(); this.card._key = null; this.renderCard(); } });
+    this.ro = new ResizeObserver(() => this.fit());
+    this.ro.observe(root);
+    this.onAdvice = () => { if (this.state) { this.paintAdvice(); this.card._key = null; this.renderCard(); } };
+    if (advisor) advisor.onUpdate(this.onAdvice);
+  }
+
+  /** When the era changes, its tree goes. */
+  destroy() {
+    this.ro.disconnect();
+    this.advisor?.listeners.delete(this.onAdvice);
+    this.root.innerHTML = '';
+  }
+
+  /** The book lights up (the last upgrade was just bought). */
+  flashBook() {
+    if (!this.bookEl) return;
+    this.bookEl.classList.remove('lit');
+    void this.bookEl.offsetWidth;
+    this.bookEl.classList.add('lit');
   }
 
   addNode(n, parent, h) {
@@ -153,6 +182,18 @@ export class TreeView {
         this.paintNode(s, this.items.get(n.id), mode);
       });
     }
+    if (this.bookEl) {
+      const total = T.nodes.length;
+      const have = T.bought(s);
+      const ready = have === total;
+      const bk = `${have}|${ready}`;
+      if (this.bookEl._k !== bk) {
+        this.bookEl._k = bk;
+        this.bookEl.classList.toggle('ready', ready);
+        this.bookEl.tabIndex = ready ? 0 : -1;
+        this.bookEl.querySelector('.bk-s').textContent = ready ? 'write the book · space' : `the book · ${total - have} upgrade${total - have === 1 ? '' : 's'} to go`;
+      }
+    }
     this.first = false;
     this.state = s;
     this.fit();
@@ -170,7 +211,7 @@ export class TreeView {
     if (key === it.key) return;
     const wasHidden = it.key === '' || it.key.startsWith('hide') || it.key.startsWith('ghost') || it.key.startsWith('q');
     it.key = key;
-    const big = n.keystone || n.id.startsWith('master_') || !n.req.length;
+    const big = !!n.news || !n.req.length;
     b.hidden = mode === 'hide';
     b.className = `node s-${st}${mode === 'ghost' ? ' ghost' : ''}${mode === 'q' ? ' teaser' : ''}${big ? ' key' : ''}`;
     it.nm.textContent = mode === 'q' ? '' : n.name;
@@ -239,9 +280,6 @@ export class TreeView {
       else if (adv) impact = `<p class="nc-impact${adv.gain >= 0.005 ? '' : ' flat'}"><b>${fmtGain(adv.gain)}</b> ink per draft, typing like you${best === n.id ? ' — <i>the best buy</i>' : ''}.</p>`;
       else if (this.advisor && this.currency === 'ink') impact = '<p class="nc-impact flat">working out what it does for you…</p>';
     }
-    const master = n.id.startsWith('master_');
-    const era = n.era && !master ? `<p class="nc-era">works only in ${ERA_NAME[n.era]}.</p>` : '';
-    if (n.era && !master && n.era !== s.era) impact = '';
     const below = n.req.length ? T.byId[n.req[0]] : null;
     const missing = T.missing(s, n);
     const need = ghost && below ? `first: ${below.name.toLowerCase()}.` : missing.length ? `first: ${missing.join(', ').toLowerCase()}.` : '';
@@ -249,11 +287,10 @@ export class TreeView {
       <span class="legend"></span>
       <p class="nc-short">${shapeIcon(it.shape, 'shp-mini big')}<span></span></p>
       <p class="nc-desc"></p>
-      ${era}
       ${impact}
       ${need ? '<p class="nc-missing"></p>' : ''}
       <div class="nc-foot">${l ? '<span class="nc-done">bought</span>' : `<span class="nc-cost ${wallet >= cost ? '' : 'poor'}">${cur}${fmt(cost)}</span>${ghost ? '' : wallet < cost ? `<span class="nc-left">${fmt(cost - wallet)} to go</span>` : '<span class="nc-left">click to buy</span>'}`}</div>`;
-    this.card.querySelector('.legend').textContent = `${n.name} · ${colName}${n.keystone ? ' keystone' : master ? ' masterwork' : ''}`;
+    this.card.querySelector('.legend').textContent = `${n.name} · ${colName}`;
     this.card.querySelector('.nc-short span').textContent = n.short;
     this.card.querySelector('.nc-desc').textContent = n.desc;
     const miss = this.card.querySelector('.nc-missing');

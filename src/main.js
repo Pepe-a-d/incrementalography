@@ -1,23 +1,26 @@
-// Start-up and loop: upgrades ⇄ draft ⇄ summary, publishing, eras, challenges and the Magnum Opus.
+// Start-up and loop: upgrades ⇄ draft ⇄ summary, the book of each era (its boss), the next era, and editions.
 
 import './fonts.js';
 import './style.css';
 import {
-  newState, computeStats, applyDraft, hydrate, INK, FAME, fameGain, nextFameAt, canPublish, publish, editorBuy,
-  runWpm, runAcc, challengeGoal, challengesOpen, startChallenge, abandonChallenge, fl, lvl, FAME_K,
+  newState, computeStats, applyDraft, hydrate, TREES, treeOf, owned, bookReady, winBoss, loseBoss, newEdition,
+  runWpm, runAcc, lvl, bossMercy, bossScale,
 } from './game.js';
+import { createBoss, stepBoss, botBossKeys } from './boss.js';
+import { BossView } from './bossview.js';
+import { music } from './music.js';
 import { Advisor, fmtGain } from './advisor.js';
 import { themeWords } from './words.js';
 import { DraftTutorial, EraTutorial } from './tutorial.js';
 import { icon } from './icons.js';
 import { InkEnding } from './inkend.js';
-import { createRun, stepRun, streakBonus, chainBonus, finishRun, botKeys, mulberry32 } from './run.js';
+import { createRun, stepRun, streakBonus, finishRun, botKeys, mulberry32 } from './run.js';
 import { FieldRenderer } from './render.js';
 import { TreeView } from './treeview.js';
 import { toast, modal, modalOpen, settingsDialog, setText } from './ui.js';
-import { sfx, setVolume } from './audio.js';
+import { sfx, setVolume, setMusicVolume } from './audio.js';
 import { fmt, fmtTime, setNotation } from './format.js';
-import { GAME, ERAS, ERA_IDS, NODES, NODE_BY_ID, FAME_BY_ID, CHALLENGES, CHALLENGE_BY_ID, INK_COLUMNS, FAME_COLUMNS } from './data.js';
+import { GAME, ERAS, ERA_IDS, ERA_NODES, NODE_BY_ID, COLUMNS } from './data.js';
 
 const SAVE_KEY = `${GAME.id}:save`;
 const $ = (s) => document.querySelector(s);
@@ -29,7 +32,6 @@ const STREAKS = [[25, 'Steady'], [50, 'Fluent'], [100, 'Unstoppable'], [200, 'Le
 const G = {
   state: null,
   screen: 'tree',
-  tab: 'ink',
   run: null,
   keys: [],
   frozen: false, // don't save (tests, import, delete)
@@ -48,6 +50,7 @@ const G = {
   applySettings() {
     const st = G.state.settings;
     setVolume(st.volume);
+    setMusicVolume(st.music);
     setNotation(st.notation);
     if (G.renderer && G.renderer.wordScale !== st.words) { G.renderer.wordScale = st.words; G.renderer.measure(); }
   },
@@ -109,8 +112,11 @@ function applyTheme(era) {
   const e = ERAS[era];
   const root = document.documentElement;
   for (const [k, v] of Object.entries(e.theme)) root.style.setProperty(`--${k}`, v);
+  // the page the words cross (in the Typewriter, a sheet of paper on the dark desk)
+  for (const [k, v] of Object.entries(e.page || e.theme)) root.style.setProperty(`--page-${k}`, v);
   root.style.setProperty('--era-font', e.font);
-  root.dataset.ui = e.ui;
+  root.style.setProperty('--ui', e.ui);
+  root.dataset.ui = e.mode;
   root.dataset.era = era;
   document.querySelector('meta[name="theme-color"]')?.setAttribute('content', e.theme.bg);
 }
@@ -119,7 +125,6 @@ function applyTheme(era) {
 
 const chipHTML = (ic, value) => `${icon(ic)}${value}`;
 const DROP = () => icon('droplet');
-const STAR = () => icon('star');
 
 function renderChip(elm, icon, value) {
   const v = fmt(value);
@@ -130,54 +135,45 @@ function renderChip(elm, icon, value) {
   }
 }
 
+/** The tree of the era you are in (a new one when the era changes). */
+function ensureTree() {
+  const s = G.state;
+  if (G.inkTree && G.treeEra === s.era) return;
+  G.inkTree?.destroy();
+  const box = $('#tree-ink');
+  box.innerHTML = '';
+  G.treeEra = s.era;
+  G.inkTree = new TreeView(box, { tree: TREES[s.era], currency: 'ink', columns: ERAS[s.era].columns, onBuy: onBuyInk, advisor: G.advisor, book: { era: s.era, onClick: startBoss } });
+}
+
 function refreshTree() {
   const s = G.state;
   renderChip($('#w-ink'), 'droplet', s.ink);
-  renderChip($('#w-fame'), 'star', s.fame);
-  $('#w-fame').hidden = !(s.fame > 0 || s.publishes > 0);
-
-  const showFame = s.publishes > 0 || canPublish(s) || s.fame > 0;
-  const tabs = $('#tabs');
-  const famTab = tabs.querySelector('[data-tab="fame"]');
-  famTab.hidden = !showFame;
-  famTab.innerHTML = `${STAR()}fame${FAME.affordable(s) ? '<span class="new">*</span>' : ''}`;
-  const chTab = tabs.querySelector('[data-tab="chal"]');
-  chTab.hidden = !challengesOpen(s);
-  tabs.querySelector('[data-tab="ink"]').innerHTML = `${DROP()}upgrades${G.tab !== 'ink' && INK.affordable(s) ? '<span class="new">*</span>' : ''}`;
-  chTab.innerHTML = `${icon('trophy')}challenges`;
-  tabs.style.visibility = !showFame && !challengesOpen(s) ? 'hidden' : '';
-  if ((G.tab === 'fame' && !showFame) || (G.tab === 'chal' && !challengesOpen(s))) G.tab = 'ink';
-  for (const b of tabs.querySelectorAll('button')) b.classList.toggle('on', b.dataset.tab === G.tab);
-  $('#tree-ink').hidden = G.tab !== 'ink';
-  $('#tree-fame').hidden = G.tab !== 'fame';
-  $('#chal').hidden = G.tab !== 'chal';
+  ensureTree();
   G.advisor.request(s);
-  if (G.tab === 'ink') G.inkTree.update(s);
-  if (G.tab === 'fame') G.fameTree.update(s);
-  if (G.tab === 'chal') renderChallenges();
-
-  // publishing: the next goal, always in sight
-  const gain = fameGain(s);
-  const pub = $('#publish');
+  G.inkTree.update(s);
+  const e = ERAS[s.era];
+  const ek = `${s.era}|${s.edition}|${Object.keys(s.trophies).join()}`;
+  const label = $('#era-name');
+  if (label._k !== ek) {
+    label._k = ek;
+    label.innerHTML = `<b>${e.name.toLowerCase()}</b>${s.edition > 1 ? ` · edition ${roman(s.edition)}` : ''}`
+      + `<span class="trophies">${ERA_IDS.filter((x) => s.trophies[x]).map((x) => `<span class="trophy" title="${ERAS[x].trophy.name}: ${ERAS[x].trophy.short}">${icon(ERAS[x].trophy.icon)}</span>`).join('')}</span>`;
+  }
+  // the goal, always in sight: every upgrade of the era, then its book
+  const ready = bookReady(s);
+  const total = ERA_NODES[s.era].length;
   const hint = $('#pub-hint');
-  if (canPublish(s)) {
-    pub.hidden = false;
-    pub.innerHTML = `${icon('book-upload')}publish · +${fmt(gain)}${STAR()}`;
-    pub.className = `btn${s.publishes === 0 ? ' primary' : ''}`;
-    hint.innerHTML = `next ${STAR()} in <b>${fmt(Math.max(0, nextFameAt(s) - s.cycle.ink))}</b>${DROP()}`;
-  } else {
-    pub.hidden = true;
-    if (s.publishes === 0 && s.drafts > 0) {
-      const need = FAME_BY_ID.era_typewriter.cost.b;
-      // fame grows with the square root of ink, so the bar shows √ of the way there
-      const k = Math.min(1, Math.sqrt(s.cycle.ink / (FAME_K * need * need)));
-      hint.innerHTML = `your first book can be published at <b>${need}</b>${STAR()}<span class="pub-bar"><i style="width:${(k * 100).toFixed(0)}%"></i></span>${gain} / ${need}`;
-    } else if (s.publishes > 0 && gain < 1) {
-      hint.innerHTML = `this book's first ${STAR()} at <b>${fmt(nextFameAt(s))}</b>${DROP()}`;
-    } else hint.textContent = '';
+  hint.innerHTML = ready ? `<b>${e.boss.name}</b> · ${e.boss.rule}`
+    : `${owned(s)}/${total} upgrades<span class="pub-bar"><i style="width:${((owned(s) / total) * 100).toFixed(0)}%"></i></span>then the book: <b>${e.boss.name}</b>`;
+  const start = $('#start');
+  const sk = ready ? `book|${s.era}` : 'draft';
+  if (start._k !== sk) {
+    start._k = sk;
+    start.innerHTML = ready ? `${icon(e.boss.icon)}write the book` : `${icon('file-plus')}new draft`;
+    start.classList.toggle('book', ready);
   }
   tutorialTree();
-  if (!$('#start')._k) { $('#start')._k = 1; $('#start').innerHTML = `${icon('file-plus')}new draft`; }
 }
 
 function buyPitch() {
@@ -187,27 +183,26 @@ function buyPitch() {
   return G.buyStep;
 }
 
-const BRANCH_LABEL = { value: 'ink', focus: 'focus', streak: 'streak', scriptorium: 'the scriptorium' };
-
-/** A branch whose first upgrade was waiting (after: N upgrades) just opened: say so. */
+/** A column whose first upgrade was waiting (after: N upgrades) just opened: say so. */
 function newBranches(s, before) {
-  for (const n of NODES) {
-    if (n.after && !before.has(n.id) && INK.visible(s, n)) {
-      toast(`a new branch opens: ${BRANCH_LABEL[n.branch] || n.branch}`);
+  const T = treeOf(s);
+  for (const n of T.nodes) {
+    if (n.after && !before.has(n.id) && T.visible(s, n)) {
+      toast(`a new column opens: ${COLUMNS[n.branch].name}`);
       sfx.milestone();
     }
   }
 }
-const shownNow = (s) => new Set(NODES.filter((n) => INK.visible(s, n)).map((n) => n.id));
+const shownNow = (s) => new Set(treeOf(s).nodes.filter((n) => treeOf(s).visible(s, n)).map((n) => n.id));
 
 function onBuyInk(id) {
   const s = G.state;
   const node = NODE_BY_ID[id];
   const adv = G.advisor.get(id);
   const before = shownNow(s);
-  if (INK.buy(s, id)) {
+  if (treeOf(s).buy(s, id)) {
     if (!s.flags.tutDone) s.flags.tutBought = true;
-    const big = !!(node.keystone || id.startsWith('master_'));
+    const big = !!node.news;
     const text = adv && !adv.text && adv.gain >= 0.005 ? `${fmtGain(adv.gain)} ink per draft` : node.short;
     G.inkTree.flash(id, true, text, big);
     if (big) sfx.keystone();
@@ -216,135 +211,195 @@ function onBuyInk(id) {
     save();
     if (node.news) toast(node.news);
     newBranches(s, before);
+    if (bookReady(s)) {
+      setTimeout(() => { sfx.keystone(); G.inkTree.flashBook(); toast(`every upgrade is yours: the book is ready. ${ERAS[s.era].boss.name} awaits`); }, 450);
+    }
   } else {
     sfx.deny();
     G.inkTree.flash(id, false);
   }
 }
 
-function onBuyFame(id) {
+// ── The book of the era (its boss) ─────────────────────────────────────────
+
+/** A full-screen card (the boss's name and rule, the trophy, the next era). Space goes on, Esc goes back if allowed. */
+function scene(html, { cls = '', go, back = null } = {}) {
+  const box = $('#scene');
+  box.className = `scene ${cls}`;
+  box.innerHTML = `<div class="scene-card box">${html}</div>`;
+  box.hidden = false;
+  G.sceneKeys = (e) => {
+    if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); if (!e.repeat) closeScene(go); }
+    else if (e.key === 'Escape' && back) { e.preventDefault(); closeScene(back); }
+  };
+  box.querySelector('[data-go]')?.addEventListener('click', () => closeScene(go));
+  box.querySelector('[data-back]')?.addEventListener('click', () => closeScene(back));
+}
+
+function closeScene(then) {
+  const box = $('#scene');
+  if (box.hidden) return;
+  box.hidden = true;
+  box.innerHTML = '';
+  G.sceneKeys = null;
+  then?.();
+}
+
+/** The book's door: its name, its rule, and space to begin. */
+function startBoss() {
   const s = G.state;
-  const node = FAME_BY_ID[id];
-  const before = s.era;
-  if (FAME.buy(s, id)) {
-    const big = !!node.eraUnlock || id === 'opus';
-    if (big) sfx.keystone(); else sfx.buy(buyPitch());
-    G.fameTree.flash(id, true, node.eraUnlock ? 'a new era' : node.short, big);
-    if (node.eraUnlock) {
-      const e = ERAS[node.eraUnlock];
-      toast(s.era === node.eraUnlock ? `The ${e.name} era is open: this book is written in it` : `The ${e.name} era is open: your next book is written in it`);
-      if (s.era !== before) applyTheme(s.era);
-    } else if (node.news) toast(node.news);
-    save();
-    refreshTree();
-    if (id === 'opus') setTimeout(showOpus, 450);
-  } else {
-    sfx.deny();
-    G.fameTree.flash(id, false);
+  if (!bookReady(s) || modalOpen() || !$('#scene').hidden) return;
+  const b = ERAS[s.era].boss;
+  const tries = s.cycle.bossTries;
+  s.flags.tutBook = true;
+  setTutTarget(null);
+  sfx.keystone();
+  scene(`<span class="scene-k">the book of the ${ERAS[s.era].name.toLowerCase()}</span>
+    <h1>${icon(b.icon)}${b.name}</h1>
+    <p class="lead">${b.rule}</p>
+    ${tries ? `<p class="muted">try ${tries + 1} · it gets a little easier each time</p>` : ''}
+    <div class="scene-acts"><button type="button" class="btn" data-back>not yet · esc</button><button type="button" class="btn primary big" data-go>begin · space</button></div>`,
+  { cls: 'boss-door', go: fightBoss, back: () => {} });
+}
+
+/** The fight: the era's book, with its own rules (boss.js), scene (bossview.js) and music (music.js). */
+function fightBoss() {
+  const s = G.state;
+  const st = computeStats(s);
+  G.boss = createBoss(s.era, st, { seed: (s.seed + s.stats.bossTries * 7907 + 11) >>> 0, mercy: bossMercy(s), scale: bossScale(s) });
+  G.bossT = 0;
+  G.bossDone = false;
+  G.keys = [];
+  G.away = false;
+  $('#away').hidden = true;
+  applyTheme(s.era);
+  show('boss');
+  $('#screen-boss').classList.add('typing');
+  G.bossView.set(G.boss);
+  $('#boss-name').textContent = ERAS[s.era].boss.name;
+  $('#boss-pages').innerHTML = Array.from({ length: G.boss.hpMax }, () => '<i class="pg"></i>').join('');
+  bossBanner(ERAS[s.era].boss.name, ERAS[s.era].boss.phases[0]);
+  // the first try at a book: how it works, until the first page is written
+  const tip = $('#boss-tip');
+  tip.textContent = ERAS[s.era].boss.tip;
+  tip.hidden = s.bosses[s.era].tries > 0;
+  paintBossHud();
+  music.play(s.era, 1);
+}
+
+function bossBanner(title, sub) {
+  const el = $('#boss-banner');
+  el.hidden = false;
+  el.innerHTML = `<b></b><span></span>`;
+  el.querySelector('b').textContent = title;
+  el.querySelector('span').textContent = sub;
+  el.style.animation = 'none'; void el.offsetWidth; el.style.animation = '';
+}
+
+function paintBossHud() {
+  const b = G.boss;
+  const s = G.state;
+  const done = b.hpMax - b.hp;
+  const pages = $('#boss-pages').children;
+  for (let i = 0; i < pages.length; i++) {
+    const on = i < done;
+    if (pages[i].classList.contains('on') !== on) { pages[i].classList.toggle('on', on); if (on) pages[i].classList.add('hit'); }
   }
+  setText($('#boss-phase'), ERAS[s.era].boss.phases[b.phase - 1]);
+  const f = Math.max(0, b.res / b.resMax);
+  const fill = $('#boss-res');
+  const fk = f.toFixed(3);
+  if (fill._f !== fk) { fill._f = fk; fill.style.transform = `scaleX(${fk})`; fill.parentElement.style.setProperty('--f', fk); fill.parentElement.classList.toggle('low', f < 0.25); }
+  setText($('#boss-res-label'), `${ERAS[s.era].resource} ${Math.ceil(Math.max(0, b.res))} s`);
+  setText($('#boss-wpm'), `${Math.round(runWpm(b))} wpm · ${Math.round(runAcc(b) * 100)}%`);
 }
 
-function setTab(tab) {
-  G.tab = tab;
-  refreshTree();
-}
-
-async function publishFlow() {
+function bossEvents(b) {
   const s = G.state;
-  if (!canPublish(s)) return;
-  const gain = fameGain(s);
-  const first = s.publishes === 0;
-  const r = await modal({
-    title: 'Publish your book?',
-    body: `<p>You get <b>${fmt(gain)} ★ fame</b>.</p>
-      <p>Your ink and ink upgrades start over with a new book. Fame, fame upgrades, eras and records stay.</p>
-      ${first ? '<p>Then open the <b>Typewriter era</b> in the Fame tab.</p>' : ''}`,
-    actions: [{ id: 'no', label: 'Not yet' }, { id: 'yes', label: `Publish · +${fmt(gain)} ★`, primary: true }],
-  });
-  if (r !== 'yes') return;
-  s.flags.tutPub = true;
-  const g = publish(s);
-  if (!g) return;
-  G.fameTree.fitKey = null;
-  G.inkTree.fitKey = null;
-  G.tab = 'fame';
-  save();
-  refreshTree();
-  publishCeremony(g);
-}
-
-/** The book closes, the title stamps in and stars fly to your fame. */
-function publishCeremony(g) {
-  const s = G.state;
-  sfx.publish();
-  const fx = document.createElement('div');
-  fx.className = 'pubfx';
-  fx.innerHTML = `<div class="pub-card"><span class="pub-k">Book ${s.publishes}</span><h1>Published</h1><p>+${fmt(g)} ★ fame</p></div>`;
-  document.body.append(fx);
-  setTimeout(() => sfx.stamp(), 380);
-  const chip = $('#w-fame').getBoundingClientRect();
-  const n = Math.min(18, 6 + g);
-  setTimeout(() => {
-    for (let i = 0; i < n; i++) {
-      const st = document.createElement('i');
-      st.className = 'pub-star';
-      st.textContent = '*';
-      const x0 = innerWidth / 2 + (Math.random() - 0.5) * 220;
-      const y0 = innerHeight / 2 + (Math.random() - 0.5) * 120;
-      st.style.left = `${x0}px`;
-      st.style.top = `${y0}px`;
-      document.body.append(st);
-      setTimeout(() => {
-        st.style.transform = `translate(${chip.left + chip.width / 2 - x0}px, ${chip.top + chip.height / 2 - y0}px) scale(0.5)`;
-        st.style.opacity = '0.2';
-      }, 30 + i * 35);
-      setTimeout(() => { st.remove(); sfx.tick(i / n); }, 750 + i * 35);
+  for (const e of b.events) {
+    G.bossView.onEvent(e, s.settings);
+    switch (e.type) {
+      case 'key': sfx.key(s.era); break;
+      case 'error': sfx.error(); break;
+      case 'restart': sfx.deny(); break;
+      case 'hit': if (s.era === 'typewriter') sfx.ret(); else if (s.era !== 'computer') sfx.gold(); if (b.hpMax - b.hp >= 2) $('#boss-tip').hidden = true; break;
+      case 'bell': sfx.bell(); break;
+      case 'jam': sfx.deny(); sfx.stamp(); break;
+      case 'strike': sfx.splash(); break;
+      case 'torn': sfx.pour(); break;
+      case 'fixed': sfx.ret(); break;
+      case 'break': sfx.bug(); sfx.chain(3); break;
+      case 'eat': sfx.error(); sfx.stamp(); break;
+      case 'worm': sfx.bug(); break;
+      case 'echo': sfx.error(); sfx.deny(); break;
+      case 'phase': sfx.keystone(); music.level(e.phase); bossBanner(`part ${roman(e.phase)}`, ERAS[s.era].boss.phases[e.phase - 1]); break;
+      case 'gust': sfx.pour(); break;
+      case 'win': sfx.publish(); music.stop(1.6); break;
+      case 'lose': sfx.end(); music.stop(1.6); break;
+      default: break;
     }
-  }, 900);
-  setTimeout(() => fx.classList.add('out'), 1700);
-  setTimeout(() => { fx.remove(); toast(`Book ${s.publishes} published: +${fmt(g)} ★`); }, 2100);
+  }
+  b.events.length = 0;
 }
 
-// ── Challenges ─────────────────────────────────────────────────────────────
-
-function renderChallenges() {
+/** After the fight: a won book leaves its trophy and opens the next era; a lost one sends you back to the tree. */
+function finishBoss(won, { time = 0, left = 0 } = {}) {
   const s = G.state;
-  const box = $('#chal');
-  const active = s.cycle.chal;
-  box.innerHTML = `<p class="chal-intro">A challenge is a book with a special rule. Reach the goal inside that book to clear the tier and keep its reward forever. Tiers never end. Starting one publishes your current book first${canPublish(s) ? ` (+${fmt(fameGain(s))} ★)` : ''}.</p>
-    <div class="chal-grid">${CHALLENGES.map((c) => {
-      const tier = s.chal[c.id];
-      const isOn = active === c.id;
-      return `<div class="chal-card box${isOn ? ' active' : ''}">
-        <span class="legend">${c.name.toLowerCase()} · ${tier ? `${roman(tier)} cleared` : 'not cleared'}</span>
-        <p class="rule">${c.rule}</p>
-        <p class="reward">${c.reward}</p>
-        <p class="goal">Tier ${roman(tier + 1)}: ${fmt(challengeGoal(s, c.id))} ink in one book${isOn ? ` · ${fmt(s.cycle.ink)} so far` : ''}</p>
-        ${isOn ? `<button type="button" class="btn ghost" data-abandon="${c.id}">Drop the rule</button>` : `<button type="button" class="btn" data-start="${c.id}">Start tier ${roman(tier + 1)}</button>`}
-      </div>`;
-    }).join('')}</div>`;
-  box.querySelectorAll('[data-start]').forEach((b) => b.addEventListener('click', () => challengeFlow(b.dataset.start)));
-  box.querySelectorAll('[data-abandon]').forEach((b) => b.addEventListener('click', () => { abandonChallenge(s); save(); refreshTree(); toast('The rule is gone: this book goes on as normal'); }));
-}
-
-async function challengeFlow(id) {
-  const s = G.state;
-  const c = CHALLENGE_BY_ID[id];
-  const gain = canPublish(s) ? fameGain(s) : 0;
-  const r = await modal({
-    title: `${c.name} ${roman(s.chal[id] + 1)}`,
-    body: `<p><b>${c.rule}</b></p><p>Goal: ${fmt(challengeGoal(s, id))} ink in this book. Reward: ${c.reward.toLowerCase()}.</p>
-      <p>${gain ? `Your current book is published first (+${fmt(gain)} ★).` : 'Your current book starts over (it gives no fame yet).'}</p>`,
-    actions: [{ id: 'no', label: 'Cancel' }, { id: 'yes', label: 'Start', primary: true }],
-  });
-  if (r !== 'yes') return;
-  const g = startChallenge(s, id);
-  if (g) sfx.publish(); else sfx.start();
-  G.inkTree.fitKey = null;
-  G.tab = 'ink';
+  music.stop(0.8);
+  $('#screen-boss').classList.remove('typing');
+  if (!won) {
+    loseBoss(s);
+    save();
+    const b = ERAS[s.era].boss;
+    scene(`<span class="scene-k">${ERAS[s.era].name.toLowerCase()} · the book is not done</span>
+      <h1>${icon(b.icon)}${b.name}</h1>
+      <p class="lead">Your ${ERAS[s.era].resource} ran out with ${Math.round(left * 100)}% of the book still to write.</p>
+      <p>The next try is a little easier. ${G.result && G.result.ink ? `The ink you wrote is yours: +${fmt(G.result.ink)}.` : ''}</p>
+      <div class="scene-acts"><button type="button" class="btn" data-back>back to the tree · esc</button><button type="button" class="btn primary big" data-go>try again · space</button></div>`,
+    { cls: 'boss-lost', go: fightBoss, back: () => { show('tree'); refreshTree(); } });
+    return;
+  }
+  const era = s.era;
+  const res = winBoss(s, { time });
   save();
+  sfx.publish();
+  const t = res.trophy;
+  if (!res.next) {
+    // the last book: the end of this edition
+    const tries = ERA_IDS.reduce((a, e) => a + s.bosses[e].tries, 0);
+    scene(`<span class="scene-k">edition ${roman(s.edition)} · the end</span>
+      <h1>the last page</h1>
+      <p class="lead">From the first quill stroke to the last thought, your book is written.</p>
+      <div class="scene-trophies">${ERA_IDS.map((e) => `<span title="${ERAS[e].trophy.short}">${icon(ERAS[e].trophy.icon)}<i>${ERAS[e].trophy.name.toLowerCase()}</i></span>`).join('')}</div>
+      <div class="scene-stats">
+        <div><b>${fmtTime(s.stats.played)}</b><span>writing</span></div>
+        <div><b>${fmt(s.stats.words)}</b><span>words caught</span></div>
+        <div><b>${Math.round(s.stats.bestWpm)}</b><span>best wpm</span></div>
+        <div><b>${fmt(s.stats.totalInk)}</b><span>ink in all</span></div>
+        <div><b>${s.drafts}</b><span>drafts</span></div>
+        <div><b>${tries}</b><span>tries at the books</span></div>
+      </div>
+      <p>Begin <b>edition ${roman(s.edition + 1)}</b>: back to the Scriptorium with your trophies and twice the ink, but faster, longer words and longer books.</p>
+      <div class="scene-acts"><button type="button" class="btn primary big" data-go>edition ${roman(s.edition + 1)} · space</button></div>`,
+    { cls: 'era-end', go: () => { newEdition(s); save(); enterEra(); } });
+    return;
+  }
+  const n = ERAS[res.next];
+  scene(`<span class="scene-k">${ERAS[era].name.toLowerCase()} · the book is written</span>
+    <h1>${icon(t.icon)}${t.name}</h1>
+    <p class="lead">${t.short}, for the rest of the game.</p>
+    <p>Next: <b>the ${n.name} era</b>. ${n.keys}, a new tree, and a new book at the end of it.</p>
+    <div class="scene-acts"><button type="button" class="btn primary big" data-go>on to the ${n.name.toLowerCase()} · space</button></div>`,
+  { cls: 'era-end', go: enterEra });
+}
+
+/** Into the era you are in now (after a book, or a new edition): its look, its empty tree. */
+function enterEra() {
+  const s = G.state;
+  applyTheme(s.era);
+  show('tree');
   refreshTree();
-  toast(`${c.name}: ${c.rule}`);
+  sfx.start();
 }
 
 // ── Draft ──────────────────────────────────────────────────────────────────
@@ -354,13 +409,16 @@ function show(screen) {
   $('#screen-title').hidden = screen !== 'title';
   $('#screen-tree').hidden = screen !== 'tree';
   $('#screen-run').hidden = screen !== 'run';
+  $('#screen-boss').hidden = screen !== 'boss';
+  if (screen === 'boss') G.bossView.resize();
 }
 
 
 async function startRun() {
-  if (modalOpen() || !$('#opus').hidden) return;
+  if (modalOpen() || !$('#scene').hidden) return;
   if (G.screen === 'run' && !G.summaryShown) return;
   const s = G.state;
+  if (G.screen === 'tree' && bookReady(s)) { startBoss(); return; } // the whole tree is bought: the next thing is the book
   const st = computeStats(s);
   const seed = (s.seed + s.drafts * 7919) >>> 0;
   G.run = createRun(st, seed);
@@ -453,7 +511,7 @@ function placeTutTip() {
   const dim = $('#tut-dim');
   if (!el || tip.hidden) return;
   const r = el.getBoundingClientRect();
-  if (!r.width || modalOpen() || (G.screen !== 'tree' && !el.closest('#summary'))) {
+  if (!r.width || modalOpen() || !$('#scene').hidden || (G.screen !== 'tree' && !el.closest('#summary'))) {
     tip.style.visibility = 'hidden';
     dim.style.visibility = 'hidden';
     return;
@@ -479,17 +537,18 @@ function placeTutTip() {
   }
 }
 
-/** The steps of the tutorial on the upgrades screen: buy your first upgrade, write another draft; later, publish. */
+/** The steps of the tutorial on the upgrades screen: buy your first upgrade, write another draft; later, the book. */
 function tutorialTree() {
   const s = G.state;
   let target = null;
   let text = '';
   let spot = null;
   if (G.screen === 'tree' && !modalOpen()) {
-    if (!s.flags.tutDone && s.drafts >= 1 && G.tab === 'ink') {
+    if (!s.flags.tutDone && s.drafts >= 1) {
       if (!s.flags.tutBought) {
-        const best = G.advisor.best && INK.status(s, NODE_BY_ID[G.advisor.best]) === 'buy' ? G.advisor.best : null;
-        const cheap = INK.nodes.filter((n) => INK.status(s, n) === 'buy').sort((a, b) => INK.cost(s, a) - INK.cost(s, b))[0];
+        const T = treeOf(s);
+        const best = G.advisor.best && T.byId[G.advisor.best] && T.status(s, NODE_BY_ID[G.advisor.best]) === 'buy' ? G.advisor.best : null;
+        const cheap = T.nodes.filter((n) => T.status(s, n) === 'buy').sort((a, b) => T.cost(s, a) - T.cost(s, b))[0];
         const id = best || (cheap && cheap.id);
         if (id) {
           const it = G.inkTree.items.get(id);
@@ -506,9 +565,9 @@ function tutorialTree() {
         text = 'upgrades make every draft better. write the next one ↓';
         spot = [target];
       }
-    } else if (s.flags.tutDone && canPublish(s) && s.publishes === 0 && !s.flags.tutPub) {
-      target = $('#publish');
-      text = 'your book is ready: publish it to earn fame ↓';
+    } else if (bookReady(s) && !s.flags.tutBook) {
+      target = $('#start');
+      text = 'every upgrade is yours: write the book ↓';
     }
   }
   setTutTarget(target, text, spot);
@@ -532,7 +591,6 @@ function onRunEnd() {
   const s = G.state;
   const run = G.run;
   G.result = applyDraft(s, run);
-  G.editor = editorBuy(s);
   save();
   sfx.end();
   $('#run-hint').hidden = true;
@@ -551,7 +609,6 @@ function showSummary() {
   if (res.bestDraft) notes.push('best draft');
   if (res.bestWpm) notes.push('new best wpm');
   else if (res.bestEraWpm) notes.push(`best wpm in the ${ERAS[run.st.era].name.toLowerCase()}`);
-  if (res.challenge) notes.push(`${CHALLENGE_BY_ID[res.challenge.id].name.toLowerCase()} ${roman(res.challenge.tier)} cleared`);
   $('#summary').hidden = false;
   const btn = $('#to-tree');
   btn.classList.remove('in');
@@ -563,7 +620,6 @@ function showSummary() {
   });
   btn.style.top = `${Math.round(G.inkEnd.layout.button)}px`;
   G.summaryPrimary = toTree;
-  if (res.challenge) toast(`${CHALLENGE_BY_ID[res.challenge.id].name} ${roman(res.challenge.tier)} cleared: ${CHALLENGE_BY_ID[res.challenge.id].reward.toLowerCase()}`);
 }
 
 /** Once the stain has spread: the way to the upgrades (and, in the first draft, the tutorial's pointer to it). */
@@ -592,7 +648,7 @@ function updateRunHUD(dt = 0) {
   const ek = `${s.era}|${s.cycle.drafts}`;
   if (era._k !== ek) {
     era._k = ek;
-    era.innerHTML = `<b>${ERAS[s.era].name.toLowerCase()}</b> · draft ${s.cycle.drafts + (run.ended ? 0 : 1)}${st.chal ? ` · ${CHALLENGE_BY_ID[st.chal].name}` : ''}`;
+    era.innerHTML = `<b>${ERAS[s.era].name.toLowerCase()}</b> · draft ${s.cycle.drafts + (run.ended ? 0 : 1)}`;
   }
   const ink = $('#hud-ink');
   // the counter rolls up towards the real value instead of jumping
@@ -613,72 +669,14 @@ function updateRunHUD(dt = 0) {
   const f = Math.max(0, run.focus / run.focusMax);
   const fill = $('#focus-fill');
   const fk = f.toFixed(3);
-  if (fill._f !== fk) { fill._f = fk; fill.style.transform = `scaleX(${fk})`; fill.parentElement.classList.toggle('low', f < 0.25); }
+  if (fill._f !== fk) { fill._f = fk; fill.style.transform = `scaleX(${fk})`; fill.parentElement.style.setProperty('--f', fk); fill.parentElement.classList.toggle('low', f < 0.25); }
   const sb = streakBonus(run);
   const sf = $('#streak-fill');
   const sk = (sb / st.streakCap).toFixed(3);
   if (sf._f !== sk) { sf._f = sk; sf.style.transform = `scaleX(${sk})`; }
   const ch = st.chain && !run.ended && run.chain >= 2 && run.t - run.lastCatchT < st.chainWindow ? ` · chain ×${run.chain}` : '';
   setText($('#streak-label'), sb > 0.005 || ch ? `streak +${Math.round(sb * 100)}%${ch}` : '');
-  setText($('#focus-label'), `focus ${Math.ceil(Math.max(0, run.focus))} s`);
-}
-
-// ── Magnum Opus ────────────────────────────────────────────────────────────
-
-function showOpus() {
-  const s = G.state;
-  const box = $('#opus');
-  box.innerHTML = `<canvas></canvas><div class="opus-card box">
-    <h1>magnum opus</h1>
-    <p class="lead">From the first quill stroke to the last thought, your life's book is written.</p>
-    <div class="opus-stats">
-      <div><b>${fmtTime(s.stats.played)}</b><span>writing</span></div>
-      <div><b>${fmt(s.stats.words)}</b><span>words caught</span></div>
-      <div><b>${Math.round(s.stats.bestWpm)}</b><span>best wpm</span></div>
-      <div><b>${fmt(s.stats.totalInk)}</b><span>ink in total</span></div>
-      <div><b>${s.publishes}</b><span>books published</span></div>
-      <div><b>${fmt(s.stats.fame)}</b><span>fame earned</span></div>
-    </div>
-    <button type="button" class="btn primary big" id="opus-go">Keep writing ▶</button>
-    <p class="muted" style="margin-top:14px;font-size:13px">Challenges are open: special books with tiers that never end.</p>
-  </div>`;
-  box.hidden = false;
-  sfx.publish();
-  const c = box.querySelector('canvas');
-  const ctx = c.getContext('2d');
-  const dpr = Math.min(2, window.devicePixelRatio || 1);
-  const W = (c.width = innerWidth * dpr);
-  const H = (c.height = innerHeight * dpr);
-  const rng = mulberry32(s.seed);
-  const pool = ['quill', 'parchment', 'Ribbon,', 'Carriage', 'file_2', '#tag', 'v3.1', 'Neural link.', 'Orbit 77', 'psalter', 'Memo.', 'kernel()', 'Signal 9', 'vellum', "Don't", '~/home'];
-  const words = Array.from({ length: 70 }, (_, i) => ({ t: pool[i % pool.length], x: rng() * W, y: rng() * H, v: (12 + rng() * 30) * dpr, era: ERA_IDS[i % 4], a: 0.04 + rng() * 0.08 }));
-  let last = performance.now();
-  const color = getComputedStyle(document.documentElement).getPropertyValue('--ink').trim();
-  const loop = (now) => {
-    if (box.hidden) return;
-    const dt = Math.min(0.05, (now - last) / 1000);
-    last = now;
-    ctx.clearRect(0, 0, W, H);
-    for (const w of words) {
-      w.y -= w.v * dt;
-      if (w.y < -40) { w.y = H + 30; w.x = rng() * W; }
-      ctx.globalAlpha = w.a;
-      ctx.fillStyle = color;
-      ctx.font = `${22 * dpr}px ${ERAS[w.era].font}`;
-      ctx.fillText(w.t, w.x, w.y);
-    }
-    requestAnimationFrame(loop);
-  };
-  requestAnimationFrame(loop);
-  const go = box.querySelector('#opus-go');
-  go.focus();
-  go.addEventListener('click', () => {
-    box.hidden = true;
-    s.flags.opusSeen = true;
-    save();
-    G.tab = 'chal';
-    refreshTree();
-  });
+  setText($('#focus-label'), `${ERAS[st.era].resource} ${Math.ceil(Math.max(0, run.focus))} s`);
 }
 
 // ── Keys ───────────────────────────────────────────────────────────────────
@@ -778,7 +776,8 @@ function leaveTitle() {
 /** Leaving the window during a draft pauses it (if the setting is on); a key brings it back. */
 function setAway(on) {
   if (on === G.away) return;
-  if (on && !(G.screen === 'run' && G.run && !G.run.ended && G.state.settings.autoPause && !G.bot)) return;
+  const fighting = (G.screen === 'run' && G.run && !G.run.ended) || (G.screen === 'boss' && G.boss && !G.boss.ended);
+  if (on && !(fighting && G.state.settings.autoPause && !G.bot)) return;
   G.away = on;
   G.keys.length = 0;
   $('#away').hidden = !on;
@@ -790,6 +789,13 @@ function bindInput() {
   window.addEventListener('keydown', (e) => {
     if (modalOpen()) return;
     if (G.screen === 'title') { titleKey(e); return; }
+    if (G.screen === 'boss' && G.boss && !G.boss.ended && $('#scene').hidden) {
+      if ((e.metaKey || e.ctrlKey) && !(e.ctrlKey && e.altKey)) return;
+      e.preventDefault();
+      if (G.away) { if (!['Shift', 'Control', 'Alt', 'Meta', 'CapsLock'].includes(e.key)) setAway(false); return; }
+      if (!e.repeat && !G.bot && (e.key.length === 1 || e.key === 'Enter')) G.keys.push(e.key);
+      return;
+    }
     const run = G.run;
     if (G.screen === 'run' && run && !run.ended) {
       if ((e.metaKey || e.ctrlKey) && !(e.ctrlKey && e.altKey)) return; // let shortcuts through (AltGr types symbols)
@@ -813,7 +819,7 @@ function bindInput() {
       }
       return;
     }
-    if (!$('#opus').hidden) return;
+    if (!$('#scene').hidden) { G.sceneKeys?.(e); return; }
     if (G.screen === 'run' && G.summaryShown && e.key === 'Enter') {
       e.preventDefault();
       if (performance.now() > G.summaryAt) G.summaryPrimary();
@@ -849,6 +855,7 @@ function frame(t) {
 function tick(dt) {
   if (G.state && !document.hidden) G.state.stats.played += dt;
   if (G.tutTarget) placeTutTip();
+  if (G.screen === 'boss' && G.boss) { tickBoss(dt); return; }
   if (G.screen === 'run' && G.run) {
     const run = G.run;
     const s = G.state;
@@ -894,6 +901,32 @@ function tick(dt) {
 
 /** A blink of freeze on a big catch, unless the player asked for calm effects. */
 function hitstop(t) { if (!G.state.settings.calm) G.hitstop = t; }
+
+function tickBoss(dt) {
+  const b = G.boss;
+  if (!G.paused && !G.away && !b.ended) {
+    let left = dt;
+    let keys = G.keys.splice(0);
+    while (left > 0 && !b.ended) {
+      const h = Math.min(1 / 60, left);
+      if (G.bot) keys = keys.concat(botBossKeys(b, h, G.bot));
+      stepBoss(b, h, keys);
+      keys = [];
+      left -= h;
+    }
+  }
+  bossEvents(b);
+  G.bossView.draw(G.paused || G.away ? 0 : dt);
+  paintBossHud();
+  if (b.ended && !G.bossDone) {
+    G.bossT += dt;
+    if (G.bossT > 1.6) {
+      G.bossDone = true;
+      G.result = applyDraft(G.state, b, { boss: true }); // its typing counts for records, and its ink is yours
+      finishBoss(b.won, { time: b.t, left: b.hp / b.hpMax });
+    }
+  }
+}
 
 function handleEvents(run) {
   const s = G.state;
@@ -952,11 +985,11 @@ function boot() {
   G.state = loaded || newState();
   G.applySettings();
   applyTheme(G.state.era);
-  if (G.state.refund !== undefined) {
-    // a save from before the new trees: their upgrades were sold back (game.js, hydrate)
-    const r = G.state.refund;
-    toast(`some upgrades are gone, so what you spent on them is back: ${fmt(r.ink)}${DROP()}${r.fame ? ` and ${fmt(r.fame)}${STAR()}` : ''}.`);
-    delete G.state.refund;
+  if (G.state.migrated) {
+    // a save from before the eras had their own trees and bosses (game.js, hydrate)
+    const e = ERAS[G.state.migrated.era];
+    setTimeout(() => toast(`the game has changed: no more fame. each era now has its own tree, and its book to write at the end. you go on in ${e.name === 'Scriptorium' ? 'the Scriptorium' : `the ${e.name} era`}.`), 600);
+    delete G.state.migrated;
     save();
   }
 
@@ -973,19 +1006,16 @@ function boot() {
     const r = $('#hud-ink').getBoundingClientRect();
     return { x: r.left + 12, y: r.top + r.height / 2 };
   };
-  G.inkTree = new TreeView($('#tree-ink'), { tree: INK, currency: 'ink', columns: INK_COLUMNS, onBuy: onBuyInk, advisor: G.advisor });
-  G.fameTree = new TreeView($('#tree-fame'), { tree: FAME, currency: 'fame', columns: FAME_COLUMNS, onBuy: onBuyFame, advisor: G.advisor });
   G.advisor.onUpdate(() => { if (G.screen === 'tree') tutorialTree(); });
   G.inkEnd = new InkEnding($('#ink-end'));
+  G.bossView = new BossView($('#boss'));
   $('#to-tree').innerHTML = `${icon('binary-tree-2')}upgrades`;
   $('#to-tree').addEventListener('click', toTree);
   $('#gear').addEventListener('click', () => settingsDialog(G));
   $('#start').addEventListener('click', startRun);
-  $('#publish').addEventListener('click', publishFlow);
-  $('#tabs').addEventListener('click', (e) => { const b = e.target.closest('button[data-tab]'); if (b) setTab(b.dataset.tab); });
   bindInput();
   // the title screen first (#play in the address skips it, for tests)
-  const fresh = !loaded || (G.state.drafts === 0 && G.state.publishes === 0);
+  const fresh = !loaded || (G.state.drafts === 0 && !G.state.stats.bosses);
   if (location.hash === '#play') { show('tree'); refreshTree(); } else { refreshTree(); showTitle(fresh); }
   save();
   setInterval(save, 15000);
@@ -997,7 +1027,19 @@ function boot() {
   if (import.meta.env.DEV) {
     G.debug = {
       give(n = 1e6) { G.state.ink += n; G.state.cycle.ink += n; refreshTree(); },
-      fame(n = 100) { G.state.fame += n; refreshTree(); },
+      // every upgrade of the era bought (the book is ready)
+      book() { for (const n of ERA_NODES[G.state.era]) G.state.levels[n.id] = 1; refreshTree(); },
+      win() { finishBoss(true); },
+      // jump to an era (with some of its tree bought, to see it)
+      era(e = 'typewriter', n = 5) {
+        const s = G.state;
+        s.era = e;
+        s.levels = {};
+        const T = TREES[e];
+        for (let i = 0; i < n; i++) { const c = T.nodes.filter((x) => T.status(s, x) !== 'hidden' && !lvl(s, x.id)).sort((a, b) => T.cost(s, a) - T.cost(s, b))[0]; if (c) s.levels[c.id] = 1; }
+        enterEra();
+      },
+      lose() { finishBoss(false); },
       endRun() { if (G.run) finishRun(G.run); },
       bot(wpm = 55, err = 0.05) { G.bot = wpm ? { wpm, err, rng: mulberry32(wpm) } : null; },
       // with the pane hidden requestAnimationFrame barely runs: this plays `sec` seconds right away
@@ -1008,5 +1050,4 @@ function boot() {
   requestAnimationFrame(frame);
 }
 
-void fl;
 boot();

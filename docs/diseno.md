@@ -1,20 +1,22 @@
 # Incrementalography: diseño del juego
 
-> Versión 2, del 16-11-2026: añade el asesor de mejoras, los hitos, los nodos clave y el juice. El plan y el ritmo medido están en `plan-incrementalography.md`.
+> Versión 2.0 del juego, del 16-11-2026: sin Fama ni renaceres; cada era tiene su árbol, su jefe y su trofeo. El plan y el ritmo medido están en `plan-eras-y-jefes.md`; la historia anterior, en `plan-incrementalography.md`.
 
 ## En una frase
 
-Un incremental de mecanografía en inglés: atrapas tecleando las palabras que cruzan la página y avanzas por las eras de la escritura publicando libros que te dan Fama.
+Un incremental de mecanografía en inglés: atrapas tecleando las palabras que cruzan la página, compras el árbol de cada era y escribes su libro, un jefe con reglas propias, para pasar a la siguiente.
 
 ## Lo decidido
 
 | | |
 | --- | --- |
-| Estilo | Minimalista como A Dark Room (versión 4): negro sobre blanco, serifa en minúsculas, botones de 1 px que se rellenan, cajas con el título en el borde e iconos de línea. Las eras modernas apagan la luz (blanco sobre negro). Sin imágenes ni degradados |
+| Estilo | Cada era, su material (estilo A): pergamino y vela; papel de máquina sobre una mesa oscura; terminal de fósforo verde; cristal oscuro cian y magenta. Los huesos siguen siendo los de A Dark Room: etiquetas en minúscula, botones de 1 px, cajas con el título en el borde |
 | Control | Solo teclado. La primera letra apunta a una palabra y el resto la atrapa; Esc la suelta |
-| Draft | Termina al vaciarse el Focus: baja 1 s por segundo y 1,4 s por fallo, y las palabras perfectas devuelven un poco, como mucho la mitad del inicial |
-| Moneda | Tinta (Ink). Reinicio: publicar (Publish), que da Fama (★) |
-| Final | Magnum Opus (escena con tus estadísticas) y desafíos con tiers sin fin |
+| Draft | Termina al agotarse el recurso de la era (vela, cinta, batería o señal): baja 1 s por segundo y unos 1,4 s por fallo, y las palabras perfectas devuelven un poco |
+| Moneda | Tinta, que vuelve a cero en cada era |
+| Progreso | 10 mejoras por era; con todas, el libro (jefe). Ganarlo deja un trofeo para siempre y abre la era siguiente |
+| Final | Tras el Eco: escena final y la segunda edición (Nueva partida+), con los trofeos, ×2 de tinta y palabras y libros más difíciles |
+| Música | Solo en los jefes, compuesta en código (`music.js`) |
 | Idioma | Solo inglés |
 
 ## Un draft
@@ -36,78 +38,72 @@ Un incremental de mecanografía en inglés: atrapas tecleando las palabras que c
    - **En las eras oscuras** la tinta es blanca (luz) y los resultados, negros.
    - **Fuera del resumen:** la mejor compra, la compra rápida (B), «new draft», la comparación con el draft anterior y el desglose.
 
-## Eras (una por libro)
+## Las eras
 
-Cada libro se escribe en la era más nueva que tengas abierta; ya no se elige. El primer draft en cada era nueva es guiado, como el primero de la partida:
-- **Typewriter:** una mayúscula (Shift), dos palabras con puntuación y la campanilla, que espera a que pulses Enter.
-- **Computer:** una palabra con números y símbolos, y un bug que se mete en una palabra para que la atrapes (×3).
-- **Future:** una frase entera y dos palabras tenues que hay que atrapar antes de que se vuelvan nítidas (×2).
+Cada era se juega entera: su árbol vacío y la tinta a cero al llegar, su libro al final. El primer draft en cada era nueva es guiado (las teclas y la mecánica de la era).
 
-El recuadro, el HUD apagado y la tecla marcada funcionan como en el primer draft. Mientras dura, no gasta Focus y la campanilla no caduca. Sustituye a la ventana de explicación y al cartel de la era.
+| Era | Recurso | Teclas | Mecánica del draft | Tinta por letra | Libro (jefe) | Trofeo |
+| --- | --- | --- | --- | --- | --- | --- |
+| Scriptorium | vela | minúsculas | Palabras iluminadas y doradas | ×1 | El Códice del Abad | Los fallos cuestan un 25 % menos |
+| Typewriter | cinta | Mayúscula inicial, puntuación | La campanilla: Enter al final de cada línea | ×30 | El Cierre | +4 s en cada draft |
+| Computer | batería | números y símbolos | Bugs que cambian letras por símbolos | ×500 | El Gusano | La racha empieza al 25 % |
+| Future | señal | frases | Palabras tenues que valen más | ×60.000 | El Eco | La segunda edición |
 
-| Era | Teclas | Mecánica | Valor por letra | Precio de las mejoras |
+La tinta por letra crece mucho de una era a otra para que cada era empiece por encima de donde acabó la anterior (×1,8 aproximadamente), aunque el árbol esté vacío.
+
+## Los árboles (10 mejoras por era)
+
+Una raíz (el tintero, abajo) y tres columnas de tres, todas de una sola compra. La segunda columna se abre tras 2 compras y la tercera tras 4. Encima de las columnas está **el libro**: una caja punteada que dice cuántas mejoras faltan y que, con todas compradas, se enciende («write the book · space»). El botón de abajo pasa de «new draft» a «write the book».
+
+| Era | Raíz | Columna 1 | Columna 2 | Columna 3 |
 | --- | --- | --- | --- | --- |
-| Scriptorium | minúsculas | Palabras iluminadas (nodo Illumination): grandes y lentas, ×4 y +1,5 s de Focus | ×1 | ×1 |
-| Typewriter | Mayúscula inicial, puntuación, contracciones | Carro: cada 8 palabras suena la campanilla; Enter en 2,2 s da +50 % de la tinta de esa línea y +1,5 s | ×4 | ×2,5 |
-| Computer | números y símbolos (file_2, v3.1, #tag…) | Bugs: corren hasta una palabra y cambian una letra por un símbolo parecido; esa palabra vale ×3 | ×16 | ×7 |
-| Future | frases de 2–3 palabras con todo mezclado | Las palabras nuevas llegan tenues; atrapadas antes de volverse nítidas valen ×2 | ×64 | ×20 |
+| Scriptorium | Sharp Quill ×2 | quill: ×2 · largas ×3 · Ink Splash | candle: +6 s · fallos a la mitad · Vigil (+0,5 s por palabra limpia) | gold: Illumination · Gold Leaf (doradas ×3 y ×2 de frecuentes) · Psalmody (racha ×2) |
+| Typewriter | Fresh Ribbon ×2 | keys: racha ×2 · puntuación ×3 · tope de racha ×3 | carriage: bonus de línea ×3 · Quick Return · Full Page (cada 5 líneas, ×2 durante 5 s) | coffee: +6 s · Carbon Copy (25 % cuentan doble) · Correction Tape (+2 fallos gratis) |
+| Computer | Mechanical Keyboard ×2 | code: ×2 · 8+ caracteres ×3 · Macro (cadenas) | debug: bugs ×3 · el doble de bugs · Patch (+1 s por bug) | memory: +6 s · Cache (+0,5 s) · Overclock (palabras un 20 % más rápidas, ×1,5) |
+| Future | Neural Link ×2 | vision: tenues ×3 · Lucid (+1,5 s tenues) · Prophecy (frases ×3) | orbit: racha ×2 · In the Zone · Nova (cada 15ª palabra ×5) | signal: +6 s · fallos a la mitad · tope de racha ×3 |
 
-## Mejoras de tinta (se pierden al publicar)
-
-Versión 5 del árbol (pedida con muchas menos mejoras, más relevantes, muy visual y con sensación de progreso). Se eligió entre dos maquetas, anillos o columnas, y ganaron las **columnas que se llenan de tinta**:
-
-- **El tintero:** la primera mejora, **Sharp Quill** (×2 de tinta, 15), es una barra redondeada abajo que alimenta todas las columnas. Al comprarla se llena de tinta.
-- **Columnas:** cada rama es una columna con sus mejoras de abajo arriba, unidas por un tubo:
-  - Al comprar una mejora, el tubo se llena de tinta hasta ella.
-  - Mientras ahorras para la siguiente, una tinta más clara sube hacia ella: cuánto te falta, de un vistazo.
-  - Arriba de cada columna, su figura, su nombre y cuántas llevas («2/4»).
-- **Pocas cosas a la vez:**
-  - De cada columna se ve en grande solo la siguiente mejora. Las de encima son contornos punteados con el nombre en gris hasta que llegas.
-  - Una columna que aún no se ha abierto es una línea punteada con «?», y su ficha dice cuántas compras faltan.
-- **25 mejoras en total, unas 16 por libro**, cada una grande y fácil de entender. No hay ayudantes: toda la tinta la escribes tú.
-
-  | Columna (figura) | De abajo arriba |
-  | --- | --- |
-  | Ink (círculo) | ×2 ink · long words ×3 · ×3 ink · **Ink Splash** (20 % salpican) |
-  | Focus (cuadrado), desde las 2 compras | +6 s · clean words +0,5 s · mistakes cost half · **In the Zone** |
-  | Streak (rombo), desde las 4 | streak fills ×2 · +2 free mistakes · streak cap ×3 · **Chain** |
-  | Una por era (octógono) | Su mecánica en dos mejoras (iluminadas, campanilla, bugs, tenues) y su **Masterwork**: +50 % de Fama y ×2 de tinta en todas las eras |
-
-- **Nodos clave, Masterworks y el tintero** llevan una segunda línea por dentro.
-- **Al comprar:** la mejora salta y suelta un anillo, el tubo sube y la siguiente aparece.
+Los precios están en `LADDER` (`data.js`) y salen de `sim/ladder.mjs`, que los calcula a partir de cuánto se quiere ahorrar para cada mejora.
 
 ### Que se sepa qué comprar
 
-- **Asesor (`src/advisor.js`):** juega 8 drafts rápidos con un bot que escribe como tú (tu WPM y tu precisión recientes), con y sin el siguiente nivel de cada mejora, y con las mismas semillas, para que solo cambie la mejora. La ficha dice «+X % ink per draft, typing like you». Gilding se calcula con la fórmula exacta, porque las doradas son demasiado raras para medirlas en 8 drafts. Tarda ~0,3 ms por draft y va en trozos de 12 ms, así que la pantalla nunca se congela.
-- **Mejor compra:** la mejora con más ganancia por precio lleva «best buy · +X%» encima y late. Solo en el árbol: el final del draft ya no la propone.
+- **Asesor (`src/advisor.js`):** juega 8 drafts rápidos con un bot que escribe como tú, con y sin cada mejora, y con las mismas semillas. La ficha dice «+X % ink per draft, typing like you». Gold Leaf se calcula con la fórmula exacta, porque las doradas son raras.
+- **Mejor compra:** «best buy · +X%» encima de la que más da por su precio.
 - **Precio a la vista:** la tinta clara que sube por el tubo hacia la siguiente mejora.
-- **Ficha** (al pasar el ratón; ya no se queda fija al hacer clic):
-  - En grande, qué hace; debajo, la explicación.
-  - En las columnas de era, que solo funciona en esa era (las Masterworks valen en todas).
-  - Lo que te da a ti y el precio. En las de más arriba, qué hay que comprar antes.
 
-## Fama (permanente)
+## Los libros (jefes)
 
-Las mismas columnas, alimentadas por **Pen Name** (tuya desde el principio):
+Comunes a los cuatro (`boss.js`):
+- **Tu recurso** es el de la era y sale de tus estadísticas de draft, así que el árbol que compraste ayuda. Baja 1 s por segundo mientras haya algo que escribir; cada tecla buena devuelve un poco y cada pieza escrita, algo más. Cada fallo cuesta como en un draft.
+- **Las páginas** (arriba a la derecha) son lo que falta por escribir. **Tres fases**, que cambian las reglas y suben la música.
+- **Perder** te devuelve al árbol con la tinta escrita y baja la dificultad un 15 % por intento, hasta el 55 %. **Ganar** da el trofeo y la escena de la era siguiente.
+- **Primer intento:** una nota explica qué hacer, hasta la segunda página.
 
-| Columna | De abajo arriba | ★ |
-| --- | --- | --- |
-| Eras | Typewriter · Computer · Future · Magnum Opus | 3 · 12 · 40 · 1.000 |
-| Readers | ×2 ink para siempre, tres veces | 2 · 15 · 120 |
-| Acclaim (desde las 2 compras) | Fama ×1,5 · ×1,6 | 6 · 60 |
-| Advance (desde las 2) | Empiezas cada libro con 5K · 1M de tinta | 4 · 60 |
-| Craft (desde las 3) | Drafts con +50 % de racha · +5 s de Focus · Editor | 5 · 10 · 6 |
+| Libro | Reglas | Fase 2 | Fase 3 |
+| --- | --- | --- | --- |
+| El Códice del Abad | El Abad dicta versículos palabra a palabra y tú los copias, con los espacios. A oscuras: la luz es la de tu vela y se encoge al consumirse | La primera palabra de cada versículo es iluminada: un fallo la empieza de nuevo | El viento: el versículo se apaga a ratos y escribes de memoria |
+| El Cierre | La portada, línea a línea, y Enter cuando suena la campanilla (o el carro se atasca). Un reloj marca los minutos hasta la rotativa de medianoche | El lápiz rojo del editor tacha una palabra que escribiste y hay que repetirla | La rotativa arrastra el papel: una línea sin acabar a tiempo se pierde |
+| El Gusano | Un virus de trozos de código baja hacia tus archivos. Escribir un trozo lo rompe; su primer carácter lo elige. Si la cabeza llega a un archivo, se lo come | Se parte en dos | Letras corrompidas: se escriben como se ven |
+| El Eco | Una máquina escribe la misma frase con su cursor magenta. Si acabas antes, la frase es tuya; si no, pierdes señal | Las palabras a las que aún no has llegado salen desordenadas | La frase se ve un momento y se borra |
 
-## Desafíos
+**Dificultad medida** (`sim/bosses.mjs`): un bot de 55 WPM gana a la primera el 55–75 % de las veces; uno de 35 WPM pierde las primeras y gana hacia el tercer o cuarto intento.
 
-Cada desafío es un libro con una regla. Empezarlo publica el libro actual. La meta es tinta en ese libro (× el precio de su era) y crece ×3 por tier.
+## Ediciones (Nueva partida+)
 
-| Desafío | Regla | Premio por tier |
-| --- | --- | --- |
-| Perfectionist | Un fallo acaba el draft | Tope de racha +50 % |
-| Long Words | Solo palabras de 7 o más | Palabras largas ×1,5 |
-| Sprint | El Focus baja el doble | +2,5 s de Focus |
-| Blackout | Las letras se ocultan al empezar la palabra | Fama ×1,3 y tinta ×1,2 |
+Tras el Eco, la escena final (trofeos y estadísticas) ofrece la **edición II**:
+- vuelves al Scriptorium con el árbol vacío y los cuatro trofeos;
+- ×2 de tinta por edición;
+- las palabras van un 10 % más rápido y son una letra más largas;
+- los libros tienen un 20 % más de páginas.
+
+## Música
+
+`music.js` es un secuenciador pequeño con WebAudio. Cada jefe tiene su tema en bucle y cada fase añade capas y sube el tempo:
+- **Abad:** bordón de órgano en re dórico y un canto; después, un tambor de marco; al final, campanas y una voz más aguda.
+- **Cierre:** swing con contrabajo, ride y piano; después, escobillas y golpes de máquina; al final, metales y la campanilla.
+- **Gusano:** chiptune con arpegios de onda cuadrada y bajo de triángulo; después, batería; al final, una melodía.
+- **Eco:** synthwave con pads de sierra y bajo arpegiado; después, un bombo a negras y caja con cola; al final, un solo.
+
+El volumen va aparte en Ajustes (Music).
 
 ## Juice (qué se siente al jugar)
 
@@ -124,14 +120,14 @@ Se eligió tras investigar: *The Art of Screenshake* (Vlambeer), *Juice it or lo
 | Fin del draft | Las palabras caen y se apagan |
 | Final del draft | Sonido de vertido; golpe y salpicadura cuando la tinta toca la página; la tinta sube contando con tics; un acorde si hay récord |
 | Comprar | Anillo que se expande, chispas, texto flotante («+12% ink/draft») y tono que sube si compras seguido. Completar una mejora o comprar un nodo clave da una ráfaga mayor y un acorde. Los nodos nuevos aparecen con rebote |
-| Publicar | «Published» se estampa en grande y las estrellas vuelan al contador de Fama |
+| Libro escrito | La escena del trofeo (o la del final de la edición) con un acorde, y la era siguiente se enciende con su aspecto |
 
 ## Sonido
 
 Todo se genera en el navegador:
 - **Tecla según la era:** rasgueo de pluma, clac de máquina de escribir, teclado mecánico o sintetizador.
 - **Atrapar:** una nota de escala pentatónica que sube con la racha.
-- **Otros:** un golpe sordo al fallar, campanilla y retorno del carro, y un acorde al publicar.
+- **Otros:** un golpe sordo al fallar, campanilla y retorno del carro, y un acorde al escribir un libro.
 
 El volumen se ajusta en Ajustes.
 
@@ -147,7 +143,8 @@ La app de escritorio escala todo para que la ventana se vea como una de 1280×80
 ## Para probar
 
 - **En desarrollo:** `game.debug.bot(55)` hace que un bot teclee a 55 WPM (`bot(0)` lo quita).
-- **Panel oculto:** `game.debug.step(5)` avanza 5 s aunque el panel esté oculto. También `give(n)`, `fame(n)` y `endRun()`.
+- **Panel oculto:** `game.debug.step(5)` avanza 5 s aunque el panel esté oculto (también dentro de un jefe). También `give(n)` y `endRun()`.
+- **Eras y jefes:** `game.debug.era('computer', 6)` salta a una era con 6 mejoras compradas; `book()` compra todo el árbol; `win()` y `lose()` acaban el libro.
 - **Pausa:** `game.paused = true` congela el draft.
 
 ## Estilo (versión 4, del 16-11-2026)
@@ -160,7 +157,7 @@ La versión 3, de arte pintado con Figma, no gustó: tenía demasiadas imágenes
   - Cajas con el título sobre el borde: ficha de mejora, ventanas y desafíos.
   - Sin título ni registro en la pantalla de mejoras: arriba, las pestañas y lo que tienes; los avisos salen un momento bajo la barra superior (en un draft, abajo).
   - Iconos: Tabler Icons (contorno, licencia MIT), copiados a `src/icons.js` con `node scripts/icons.mjs`. Se quiso hacerlos en Figma, pero el plan Starter seguía sin llamadas.
-  - La palabra «ink» es una gota y «fame» una estrella, en los contadores, el HUD, el resumen, las fichas y la barra de abajo.
+  - La palabra «ink» es una gota en los contadores, el HUD, el resumen, las fichas y la barra de abajo.
   - **New draft:** un botón grande centrado justo encima de la barra de abajo. Se lanza también con el espacio, desde el árbol y desde el resumen (salvo en el primer resumen del tutorial). El espacio nunca pulsa la mejora que tenga el foco.
 - **Eras:** Scriptorium y Typewriter en claro; Computer y Future con la luz apagada (blanco sobre negro, con una transición de 1,2 s). Cada era conserva su fuente para las palabras de la página.
 - **Árbol** (se mantiene el árbol, a petición):

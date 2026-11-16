@@ -1,13 +1,15 @@
 # Incrementalography
 
-Incremental de mecanografía, en inglés. Atrapas tecleando las palabras que cruzan la página y avanzas por cuatro eras de la escritura (Scriptorium, Typewriter, Computer y Future). Publicas libros para ganar Fama, y después vienen el Magnum Opus y los desafíos sin fin. Hecho con el skill `incremental-pixel`, aunque en estilo minimalista.
+Incremental de mecanografía, en inglés. Atrapas tecleando las palabras que cruzan la página y avanzas por cuatro eras de la escritura (Scriptorium, Typewriter, Computer y Future). Cada era tiene su propio aspecto, su árbol de 10 mejoras y su libro: un jefe con reglas y música propias. Vencerlo deja un trofeo y te lleva a la era siguiente. Después de la última viene la segunda edición (Nueva partida+). Hecho con el skill `incremental-pixel`, aunque sin pixel art.
 
 ```bash
 npm install
 npm run dev      # http://localhost:5197
 npm run build    # genera dist/ (base relativa: vale para GitHub Pages)
-npm run sim      # bots mecanógrafos (35, 55 y 80 WPM) juegan la partida entera y miden el ritmo
-npm run humo     # juega y dibuja un draft en cada era sobre un canvas falso, sin navegador
+npm run sim      # bots mecanógrafos (35, 55 y 80 WPM) compran el árbol de cada era y miden cuánto dura cada una
+node sim/bosses.mjs     # cada jefe contra bots de 30–80 WPM: cuántas veces gana cada uno y en cuánto tiempo (MERCY=0.55: tras 3 derrotas)
+node sim/ladder.mjs 55  # calcula los precios de cada árbol a partir del ritmo que se quiere
+npm run humo     # juega y dibuja un draft y un jefe en cada era sobre un canvas falso, sin navegador
 ```
 
 ## App de escritorio (Electron)
@@ -45,12 +47,15 @@ Opciones del simulador: `node sim/balance.mjs <min> <wpm,…>`, más `SEEDS=2`, 
 
 | Archivo | Qué hace |
 | --- | --- |
-| `src/data.js` | Eras, base del draft, árbol de tinta, árbol de Fama y desafíos |
+| `src/data.js` | Eras (aspecto, recurso, jefe, trofeo), base del draft y los cuatro árboles con sus precios (`LADDER`) |
 | `src/words.js` | Palabras de cada era y cómo se transforman (mayúsculas, símbolos, frases) |
-| `src/game.js` | Partida: niveles, compras, `computeStats`, publicar, Fama, desafíos y guardado |
+| `src/game.js` | Partida: el árbol de la era, compras, `computeStats`, trofeos, ganar o perder un jefe, pasar de era, ediciones y guardado (con la migración de partidas antiguas) |
 | `src/run.js` | Un draft sin DOM: palabras, teclas, Focus, racha, carro, bugs, palabras tenues y el bot mecanógrafo |
 | `src/render.js` | Dibujo del draft en canvas, con el juice (letras que saltan, estallidos, avisos, zona, latido) |
-| `src/treeview.js` | Árboles de mejoras (tinta y Fama) en columnas que se llenan de tinta desde el tintero: figura por columna, icono y efecto, «?» por abrir, ficha, mejor compra y ráfagas |
+| `src/treeview.js` | El árbol de la era en columnas que se llenan desde el tintero, con el libro (el jefe) encima: figura por columna, icono y efecto, «?» por abrir, ficha, mejor compra y ráfagas. Cada era lo viste a su manera en CSS |
+| `src/boss.js` | Los cuatro jefes sin DOM (deterministas, como `run.js`): recurso, páginas, fases, reglas de cada uno y su bot |
+| `src/bossview.js` | Dibujo de cada jefe en su canvas: la vela del Abad, la portada y el reloj, el gusano y los archivos, el Eco y la barra de tira y afloja |
+| `src/music.js` | Música de los jefes hecha con WebAudio: un tema por era con tres intensidades que siguen las fases |
 | `src/icons.js` | Iconos de Tabler (MIT) que usa el juego; se generan con `node scripts/icons.mjs` desde la dependencia `@tabler/icons` |
 | `src/inkend.js` | Final de cada draft: la cascada de tinta que mancha la página y deja los resultados en el color del papel |
 | `src/advisor.js` | Asesor: cuánto da cada mejora con tu forma de teclear y cuál es la mejor compra |
@@ -59,6 +64,6 @@ Opciones del simulador: `node sim/balance.mjs <min> <wpm,…>`, más `SEEDS=2`, 
 | `src/tutorial.js` | Primer draft guiado y el primer draft de cada era nueva |
 | `electron/main.cjs` | La app de escritorio: ventana, protocolo `app://`, menú mínimo en el Mac. Escala el juego al tamaño de la ventana (diseñado para 1280×800) por el tamaño de interfaz elegido, y recuerda pantalla completa, ventana maximizada y tamaño en `prefs.json` de su carpeta de datos. F11 pone la pantalla completa; Ctrl/⌘ + y − cambian el tamaño, y Ctrl/⌘ 0 lo devuelve al normal |
 | `electron/preload.cjs` | Lo que el juego puede pedir a la app (`window.desktop`): pantalla completa y tamaño de interfaz, para los Ajustes |
-| `src/main.js` | Pantalla de título, pantallas, bucle, teclado, HUD, resumen, publicar, desafíos y Magnum Opus |
+| `src/main.js` | Pantalla de título, pantallas, bucle, teclado, HUD, resumen, el libro de cada era (puerta, pelea, victoria, derrota), paso de era y final |
 
-Diseño: `docs/diseno.md`. Plan, cambios y ritmo medido: `docs/plan-incrementalography.md`.
+Diseño: `docs/diseno.md`. Plan de la versión 2 (eras y jefes) y ritmo medido: `docs/plan-eras-y-jefes.md`. Historia anterior: `docs/plan-incrementalography.md`.

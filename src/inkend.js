@@ -35,8 +35,8 @@ export class InkEnding {
     this.lastTick = 0;
     this.doneSound = false;
     const css = getComputedStyle(document.documentElement);
-    this.inkColor = css.getPropertyValue('--ink').trim() || '#000';
-    this.paper = css.getPropertyValue('--bg').trim() || '#fff';
+    this.inkColor = css.getPropertyValue('--page-ink').trim() || css.getPropertyValue('--ink').trim() || '#000';
+    this.paper = css.getPropertyValue('--page-bg').trim() || css.getPropertyValue('--bg').trim() || '#fff';
     this.font = css.getPropertyValue('--ui').trim() || 'Georgia, serif';
     this.resize();
     // the blob's wobble and its fingers are random each time, so no two stains are the same

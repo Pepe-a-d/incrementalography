@@ -2,12 +2,32 @@
 
 let ctx = null;
 let master = null;
+let musicGain = null;
 let noise = null;
 let volume = 0.7;
+let musicVolume = 0.6;
 
 export function setVolume(v) {
   volume = Math.max(0, Math.min(1, v));
   if (master) master.gain.value = volume;
+}
+
+/** The boss music has its own volume (Settings → music). */
+export function setMusicVolume(v) {
+  musicVolume = Math.max(0, Math.min(1, v));
+  if (musicGain) musicGain.gain.value = musicVolume * 0.8;
+}
+
+/** The audio context and the music's output (music.js plays into it). */
+export function musicOut() {
+  const a = audio();
+  if (!a) return null;
+  if (!musicGain) {
+    musicGain = a.createGain();
+    musicGain.gain.value = musicVolume * 0.8;
+    musicGain.connect(a.destination);
+  }
+  return { ctx: a, out: musicGain, noise };
 }
 
 function audio() {

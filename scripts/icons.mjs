@@ -7,7 +7,8 @@ hourglass hourglass-high clock-plus shield shield-check wind leaf target bolt tr
 user-plus users run arrows-horizontal award gauge medal sun sparkles candle writing bookmark sun-high book-2 crown
 bell arrows-maximize corner-down-left copy keyboard notes file-text bug cpu zoom-in code database braces device-desktop
 eye eyeglass telescope atom quote brain planet pencil trophy stars laurel-wreath gift heart clipboard-text
-star settings focus-centered book-upload file-plus lock binary-tree-2 building`.split(/\s+/).filter(Boolean);
+star settings focus-centered book-upload file-plus lock binary-tree-2 building
+moon music typography hand-finger exclamation-mark coffee bandage wave-sine antenna-bars-5 bell-ringing terminal-2 clock`.split(/\s+/).filter(Boolean);
 
 const dir = 'node_modules/@tabler/icons/icons/outline';
 const out = {};

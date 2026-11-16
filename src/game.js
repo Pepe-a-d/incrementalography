@@ -1,111 +1,85 @@
-// Permanent progress: ink, fame, both trees, publishing, challenges, stats and saving. No DOM.
+// Permanent progress: the era you are in, its tree, trophies, the boss of each era, editions, stats and saving. No DOM.
 
-import { NODES, NODE_BY_ID, FAME_NODES, FAME_BY_ID, BASE, GAME, ERAS, ERA_IDS, CHALLENGES, CHALLENGE_BY_ID, OLD_COSTS, MUL } from './data.js';
+import { NODE_BY_ID, ERA_NODES, BASE, GAME, ERAS, ERA_IDS, MUL } from './data.js';
 
-export const SAVE_VERSION = 5; // 5: no helpers (older saves get back the ink and fame they spent on what is gone)
-export const FAME_K = 120000; // ink in one book for the first point of fame (fame = √(ink / K))
-const MASTERS = NODES.filter((n) => n.id.startsWith('master_')).map((n) => n.id);
+export const SAVE_VERSION = 6; // 6: eras with their own trees and bosses (no fame). Older saves move to their newest era.
 
 export function newState(now = Date.now()) {
   return {
     game: GAME.id,
     v: SAVE_VERSION,
     seed: Math.floor(Math.random() * 2 ** 31),
-    ink: 0,
-    fame: 0,
-    levels: {}, // ink tree: resets when you publish (it starts with nothing bought)
-    fameLv: { pen: 1 }, // fame tree: permanent
     era: 'scriptorium',
+    ink: 0,
+    levels: {}, // the current era's tree (starts empty in every era)
+    trophies: {}, // era → true once its boss is beaten (they stay for the rest of the game)
+    edition: 1, // New Game+: each edition starts over in the Scriptorium, harder and with more ink
     cycle: newCycle(now),
+    bosses: Object.fromEntries(ERA_IDS.map((e) => [e, { wins: 0, tries: 0, bestT: 0 }])),
     drafts: 0,
-    publishes: 0,
-    chal: Object.fromEntries(CHALLENGES.map((c) => [c.id, 0])), // tiers done
-    stats: { bestDraft: 0, totalInk: 0, time: 0, played: 0, words: 0, chars: 0, errors: 0, bestWpm: 0, bestStreak: 0, bestChain: 0, fame: 0, started: now, bought: 0, avgWpm: 0, avgAcc: 0 },
+    stats: { bestDraft: 0, totalInk: 0, time: 0, played: 0, words: 0, chars: 0, errors: 0, bestWpm: 0, bestStreak: 0, bestChain: 0, started: now, bought: 0, avgWpm: 0, avgAcc: 0, bosses: 0, bossTries: 0 },
     best: Object.fromEntries(ERA_IDS.map((e) => [e, { wpm: 0, ink: 0 }])),
     last: null,
     flags: {},
-    settings: { volume: 0.7, shake: true, notation: 'short', words: 1, calm: false, autoPause: true },
+    settings: { volume: 0.7, music: 0.6, shake: true, notation: 'short', words: 1, calm: false, autoPause: true },
     lastSave: now,
   };
 }
 
+/** What happens in one era: its drafts, the ink they made, and the tries at its boss since you came in. */
 function newCycle(now = Date.now()) {
-  return { drafts: 0, ink: 0, started: now, chal: null, bestDraft: 0 };
+  return { drafts: 0, ink: 0, started: now, bestDraft: 0, bossTries: 0 };
 }
 
 export const lvl = (s, id) => s.levels[id] || 0;
-export const fl = (s, id) => s.fameLv[id] || 0;
-export const eraUnlocked = (s, era) => era === 'scriptorium' || fl(s, `era_${era}`) > 0;
-export const unlockedEras = (s) => ERA_IDS.filter((e) => eraUnlocked(s, e));
-/** Each book is written in one era: you choose it before its first draft. */
-export const canChangeEra = (s) => s.cycle.drafts === 0;
-export function setEra(s, era) {
-  if (!eraUnlocked(s, era) || !canChangeEra(s) || s.era === era) return false;
-  s.era = era;
-  return true;
-}
+export const eraIndex = (era) => ERA_IDS.indexOf(era);
 
-// ── Generic tree logic (ink tree and fame tree share it) ───────────────────
+// ── The era's tree ─────────────────────────────────────────────────────────
 
-function makeTree({ nodes, byId, getLv, setLv, wallet, pay, extraHidden, extraLocked, scale }) {
-  const cost = (s, n) => Math.ceil(n.cost.b * n.cost.k ** getLv(s, n.id) * (scale ? scale(s) : 1));
-  // upgrades bought in this tree (the free root doesn't count): the first upgrade of a branch waits for some (n.after)
-  const bought = (s) => nodes.reduce((a, n) => a + (n.cost.b > 0 && getLv(s, n.id) > 0 ? 1 : 0), 0);
+function makeTree(era) {
+  const nodes = ERA_NODES[era];
+  const byId = Object.fromEntries(nodes.map((n) => [n.id, n]));
+  const getLv = lvl;
+  const cost = (s, n) => n.cost.b;
+  const bought = (s) => nodes.reduce((a, n) => a + (getLv(s, n.id) > 0 ? 1 : 0), 0);
+  // the first upgrade of a column waits for some upgrades (n.after)
   const waiting = (s, n) => (n.after && getLv(s, n.id) === 0 ? Math.max(0, n.after - bought(s)) : 0);
-  // the root is always there; any other upgrade shows once the one it hangs from is bought (and its branch is open)
+  // the root is always there; any other upgrade shows once the one it hangs from is bought (and its column is open)
   const visible = (s, n) => {
-    if (extraHidden && extraHidden(s, n)) return false;
     if (getLv(s, n.id) > 0 || !n.req.length) return true;
     return n.req.some((r) => getLv(s, r) > 0) && !waiting(s, n);
   };
-  const missing = (s, n) => {
-    const m = (n.reqAll || []).filter((r) => getLv(s, r) < 1).map((r) => byId[r].name);
-    const extra = extraLocked ? extraLocked(s, n) : null;
-    return extra ? [...m, extra] : m;
-  };
+  const missing = () => [];
   const status = (s, n) => {
-    if (!visible(s, n)) return 'hidden';
+    if (s.era !== era || !visible(s, n)) return 'hidden';
     if (getLv(s, n.id) >= n.max) return 'max';
-    if (missing(s, n).length) return 'locked';
-    return wallet(s) >= cost(s, n) ? 'buy' : 'poor';
+    return s.ink >= cost(s, n) ? 'buy' : 'poor';
   };
   const buy = (s, id) => {
     const n = byId[id];
     if (!n || status(s, n) !== 'buy') return false;
-    pay(s, cost(s, n));
-    setLv(s, id, getLv(s, id) + 1);
+    s.ink -= cost(s, n);
+    s.levels[id] = getLv(s, id) + 1;
     s.stats.bought += 1;
     return true;
   };
   const affordable = (s) => nodes.filter((n) => status(s, n) === 'buy').length;
-  const blocked = (s, n) => (extraHidden ? extraHidden(s, n) : false);
-  return { nodes, byId, lvl: getLv, cost, visible, missing, status, buy, affordable, wallet, blocked, bought, waiting };
+  const blocked = () => false;
+  const wallet = (s) => s.ink;
+  return { era, nodes, byId, lvl: getLv, cost, visible, missing, status, buy, affordable, wallet, blocked, bought, waiting };
 }
 
-export const INK = makeTree({
-  nodes: NODES,
-  byId: NODE_BY_ID,
-  getLv: lvl,
-  setLv: (s, id, v) => { s.levels[id] = v; if (id.startsWith('master_')) s.flags[id] = true; },
-  wallet: (s) => s.ink,
-  pay: (s, c) => { s.ink -= c; },
-  extraHidden: (s, n) => !!n.era && !eraUnlocked(s, n.era),
-  scale: (s) => ERAS[s.era].price, // a book in a later era pays more for the same upgrade
-});
+export const TREES = Object.fromEntries(ERA_IDS.map((e) => [e, makeTree(e)]));
+export const treeOf = (s) => TREES[s.era];
 
-export const FAME = makeTree({
-  nodes: FAME_NODES,
-  byId: FAME_BY_ID,
-  getLv: fl,
-  setLv: (s, id, v) => { s.fameLv[id] = v; const n = FAME_BY_ID[id]; if (n.eraUnlock && canChangeEra(s)) s.era = n.eraUnlock; },
-  wallet: (s) => s.fame,
-  pay: (s, c) => { s.fame -= c; },
-  extraLocked: (s, n) => (n.needsFlag && !s.flags[n.needsFlag] ? 'the Future Masterwork once' : null),
-});
+/** Upgrades of this era you own. */
+export const owned = (s, era = s.era) => ERA_NODES[era].filter((n) => lvl(s, n.id) > 0).length;
+/** Every upgrade of the era is bought: its book (the boss) is ready. */
+export const bookReady = (s) => owned(s) === ERA_NODES[s.era].length;
 
 // ── Stats of the next draft ────────────────────────────────────────────────
 
-/** The effects of everything you own (ink tree for this era + fame tree), added up: × for MUL keys, + for the rest. */
+/** The effects of what you own (this era's tree and every trophy), added up: × for MUL keys, + for the rest. */
 export function effects(s, era = s.era) {
   const m = {};
   const add = (eff) => {
@@ -115,47 +89,55 @@ export function effects(s, era = s.era) {
       else m[k] = (m[k] ?? 0) + v;
     }
   };
-  for (const n of NODES) if (lvl(s, n.id) && (!n.era || n.allEras || n.era === era)) add(n.eff);
-  for (const n of FAME_NODES) if (fl(s, n.id)) add(n.eff);
+  for (const n of ERA_NODES[era]) if (lvl(s, n.id)) add(n.eff);
+  for (const e of ERA_IDS) if (s.trophies[e]) add(ERAS[e].trophy.eff);
   return m;
 }
 
-export function computeStats(s, era = s.era, chal = s.cycle.chal) {
-  const T = s.chal;
+/** Each edition after the first: ×2 ink (and words 10% faster and a letter longer, in computeStats). */
+export const editionInk = (s) => 2 ** (s.edition - 1);
+
+export function computeStats(s, era = s.era) {
   const e = ERAS[era];
   const m = effects(s, era);
   const x = (k) => m[k] ?? 1; // a multiplier
   const p = (k) => m[k] ?? 0; // something that adds up
+  const ed = s.edition - 1;
   return {
     era,
     eraValue: e.value,
-    value: x('value') * 1.2 ** T.blackout,
-    longLen: BASE.longLen,
-    longMult: x('long') * 1.5 ** T.long,
-    gold: BASE.gold + p('gold'),
-    goldMult: BASE.goldMult,
-    themeShare: BASE.themeShare + p('themeShare'),
+    value: x('value') * editionInk(s),
+    longLen: e.longLen || BASE.longLen,
+    longMult: x('long'),
+    gold: BASE.gold * x('goldRate'),
+    goldMult: BASE.goldMult * x('goldMult'),
+    themeShare: BASE.themeShare,
     themeMult: BASE.themeMult * x('theme'),
-    focus: BASE.focus + p('focus') + 2.5 * T.sprint,
+    focus: BASE.focus + p('focus'),
     errCost: BASE.errCost * x('err'),
     refill: BASE.refill + p('refill'),
     refillCap: BASE.refillCap,
     streakRate: BASE.streakRate * x('rate'),
-    streakCap: BASE.streakCap * x('cap') * (1 + 0.5 * T.perfect),
+    streakCap: BASE.streakCap * x('cap'),
     streakStart: p('start'),
     steady: p('steady'),
-    crossTime: BASE.crossTime / e.speed,
+    crossTime: BASE.crossTime / e.speed / x('speed') / 1.1 ** ed,
     words: BASE.words,
     illum: era === 'scriptorium' && !!m.illum,
     illumEvery: BASE.illumEvery / x('illumRate'),
     illumMult: BASE.illumMult * x('illumMult'),
-    illumFocus: BASE.illumFocus + p('illumFocus'),
+    illumFocus: BASE.illumFocus,
     line: era === 'typewriter',
-    lineWords: BASE.lineWords + p('lineWords'),
+    lineWords: BASE.lineWords,
     lineWindow: BASE.lineWindow + p('lineWindow'),
     lineBonus: BASE.lineBonus * x('lineBonus'),
     lineFocus: BASE.lineFocus + p('lineFocus'),
     punctMult: x('punct'),
+    page: era === 'typewriter' && !!m.page,
+    pageEvery: BASE.pageEvery,
+    pageTime: BASE.pageTime,
+    pageMult: BASE.pageMult,
+    carbon: p('carbon'),
     bugs: era === 'computer',
     bugEvery: BASE.bugEvery / x('bugRate'),
     bugMult: BASE.bugMult * x('bugMult'),
@@ -163,8 +145,10 @@ export function computeStats(s, era = s.era, chal = s.cycle.chal) {
     faint: era === 'future',
     faintTime: BASE.faintTime + p('faintTime'),
     faintMult: BASE.faintMult * x('faintMult'),
-    faintClarity: p('clarity'),
     phraseMult: x('phrase'),
+    nova: !!m.nova,
+    novaEvery: BASE.novaEvery,
+    novaMult: BASE.novaMult,
     chain: !!m.chain,
     chainWindow: BASE.chainWindow,
     chainStep: BASE.chainStep,
@@ -173,12 +157,11 @@ export function computeStats(s, era = s.era, chal = s.cycle.chal) {
     zoneDrain: BASE.zoneDrain,
     zoneMult: BASE.zoneMult,
     splash: p('splash'),
-    // challenge rules
-    chal,
-    perfect: chal === 'perfect',
-    minLen: chal === 'long' ? 7 : 0,
-    drainMult: (chal === 'sprint' ? 2 : 1) * x('drain'),
-    blackout: chal === 'blackout',
+    // a later edition asks for longer words (from 5 letters in the second one)
+    minLen: ed > 0 ? Math.min(7, 4 + ed) : 0,
+    drainMult: x('drain'),
+    perfect: false,
+    blackout: false,
   };
 }
 
@@ -190,15 +173,14 @@ export function runWpm(run) {
 }
 export const runAcc = (run) => (run.chars + run.errors ? run.chars / (run.chars + run.errors) : 1);
 
-/** Adds a finished draft to the save. Returns what changed (records, challenge done). */
-export function applyDraft(s, run) {
+/** Adds a finished draft (or a boss fight: same typing stats, boss: true) to the save. Returns what changed (records). */
+export function applyDraft(s, run, { boss = false } = {}) {
   const ink = run.ink;
   const wpm = runWpm(run);
-  const out = { ink, wpm, acc: runAcc(run), bestDraft: false, bestWpm: false, bestEraWpm: false, challenge: null };
+  const out = { ink, wpm, acc: runAcc(run), bestDraft: false, bestWpm: false, bestEraWpm: false };
   s.ink += ink;
   s.cycle.ink += ink;
-  s.cycle.drafts += 1;
-  s.drafts += 1;
+  if (!boss) { s.cycle.drafts += 1; s.drafts += 1; }
   const st = s.stats;
   st.totalInk += ink;
   st.time += run.dur;
@@ -206,9 +188,9 @@ export function applyDraft(s, run) {
   st.chars += run.chars;
   st.errors += run.errors;
   if (run.bestStreak > st.bestStreak) st.bestStreak = run.bestStreak;
-  if (ink > st.bestDraft) { out.bestDraft = s.drafts > 1; st.bestDraft = ink; }
+  if (!boss && ink > st.bestDraft) { out.bestDraft = s.drafts > 1; st.bestDraft = ink; }
   const b = s.best[run.st.era];
-  if (ink > b.ink) b.ink = ink;
+  if (!boss && ink > b.ink) b.ink = ink;
   if (run.chars >= 25 && !run.tutorial) { // the guided first draft (with its pauses to read) doesn't count for speed
     if (wpm > b.wpm) { out.bestEraWpm = b.wpm > 0; b.wpm = wpm; }
     if (wpm > st.bestWpm) { out.bestWpm = st.bestWpm > 0; st.bestWpm = wpm; }
@@ -217,92 +199,55 @@ export function applyDraft(s, run) {
     st.avgAcc = st.avgAcc ? st.avgAcc * 0.7 + out.acc * 0.3 : out.acc;
   }
   if (run.bestChain > st.bestChain) st.bestChain = run.bestChain;
-  if (ink > s.cycle.bestDraft) s.cycle.bestDraft = ink;
-  out.challenge = checkChallenge(s);
+  if (!boss && ink > s.cycle.bestDraft) s.cycle.bestDraft = ink;
   out.prev = s.last ? s.last.ink : 0;
-  s.last = { ink, wpm, acc: out.acc, streak: run.bestStreak, caught: run.caught, dur: run.dur, era: run.st.era, draft: s.drafts, lines: run.lines, record: out.bestDraft || out.bestWpm };
+  if (!boss) s.last = { ink, wpm, acc: out.acc, streak: run.bestStreak, caught: run.caught, dur: run.dur, era: run.st.era, draft: s.drafts, lines: run.lines, record: out.bestDraft || out.bestWpm };
   return out;
 }
 
-/** The editor buys the cheapest ink upgrades. */
-export function editorBuy(s) {
-  if (!effects(s).editor) return [];
-  const bought = [];
-  for (let i = 0; i < 200; i++) {
-    const opts = NODES.filter((n) => INK.status(s, n) === 'buy').sort((a, b) => INK.cost(s, a) - INK.cost(s, b));
-    if (!opts.length) break;
-    INK.buy(s, opts[0].id);
-    bought.push(opts[0].id);
-  }
-  return bought;
-}
+// ── Bosses, eras and editions ──────────────────────────────────────────────
 
-// ── Publishing (the reset) ─────────────────────────────────────────────────
+/** Each lost try at this era's boss makes it 15% easier, down to 55% (the resource burns slower). */
+export const bossMercy = (s) => 1 - 0.15 * Math.min(3, s.cycle.bossTries);
+/** Later editions: bosses with 20% more to write per edition. */
+export const bossScale = (s) => 1.2 ** (s.edition - 1);
 
-export function fameMult(s) {
-  const masters = MASTERS.filter((id) => lvl(s, id) > 0).length;
-  return (1 + 0.5 * masters) * (effects(s).fame ?? 1) * 1.3 ** s.chal.blackout;
-}
-
-export function fameGain(s, ink = s.cycle.ink) {
-  return Math.floor(Math.sqrt(Math.max(0, ink) / (FAME_K * ERAS[s.era].price)) * fameMult(s));
-}
-
-/** Ink this book needs for one more point of fame. */
-export function nextFameAt(s) {
-  const g = fameGain(s) + 1;
-  return Math.ceil(FAME_K * ERAS[s.era].price * (g / fameMult(s)) ** 2 + 1);
-}
-
-/** The first book can only be published once it pays for the Typewriter. */
-export function canPublish(s) {
-  const g = fameGain(s);
-  return g >= 1 && (s.publishes > 0 || s.fame + g >= FAME_BY_ID.era_typewriter.cost.b);
-}
-
-/** Ink a new book starts with (the biggest Advance you own). */
-export const headStartInk = (s) => FAME_NODES.reduce((a, n) => (fl(s, n.id) && n.eff.startInk ? Math.max(a, n.eff.startInk) : a), 0);
-
-function resetCycle(s, now = Date.now()) {
+function enterEra(s, era, now = Date.now()) {
+  s.era = era;
   s.levels = {};
-  s.era = unlockedEras(s).at(-1); // each new book is written in the newest era you have opened
-  s.ink = headStartInk(s);
+  s.ink = 0;
   s.cycle = newCycle(now);
 }
 
-export function publish(s, now = Date.now()) {
-  if (!canPublish(s)) return 0;
-  const g = fameGain(s);
-  s.fame += g;
-  s.stats.fame += g;
-  s.publishes += 1;
-  resetCycle(s, now);
-  return g;
+/** The boss is beaten: its trophy stays forever, and you go on to the next era (or, after the last one, the end). */
+export function winBoss(s, { time = 0 } = {}, now = Date.now()) {
+  const era = s.era;
+  const rec = s.bosses[era];
+  rec.wins += 1;
+  rec.tries += 1;
+  if (time > 0 && (!rec.bestT || time < rec.bestT)) rec.bestT = time;
+  s.stats.bosses += 1;
+  s.stats.bossTries += 1;
+  const first = !s.trophies[era];
+  s.trophies[era] = true;
+  const next = ERAS[era].next;
+  if (next) enterEra(s, next, now);
+  else s.flags.finished = true; // the ending; a new edition starts from there (newEdition)
+  return { era, next, first, trophy: ERAS[era].trophy };
 }
 
-// ── Challenges ─────────────────────────────────────────────────────────────
-
-// the goal is in ink of the book's era (a later era pays more for everything, goals too)
-export const challengeGoal = (s, id) => CHALLENGE_BY_ID[id].goal * ERAS[s.era].price * CHALLENGE_BY_ID[id].grow ** s.chal[id];
-export const challengesOpen = (s) => fl(s, 'opus') > 0;
-
-/** Starting a challenge publishes the current book (if it gives fame) and starts a new one under the rule. */
-export function startChallenge(s, id, now = Date.now()) {
-  if (!challengesOpen(s) || !CHALLENGE_BY_ID[id]) return 0;
-  const g = publish(s, now);
-  if (!g) resetCycle(s, now);
-  s.cycle.chal = id;
-  return g;
+/** The boss won: the ink written during the fight is kept (applyDraft), and the next try is a little easier. */
+export function loseBoss(s) {
+  s.cycle.bossTries += 1;
+  s.bosses[s.era].tries += 1;
+  s.stats.bossTries += 1;
 }
 
-export function abandonChallenge(s) { s.cycle.chal = null; }
-
-function checkChallenge(s) {
-  const id = s.cycle.chal;
-  if (!id || s.cycle.ink < challengeGoal(s, id)) return null;
-  s.chal[id] += 1;
-  s.cycle.chal = null;
-  return { id, tier: s.chal[id] };
+/** New Game+: back to the Scriptorium with every trophy, ×2 ink, and harder words and bosses. */
+export function newEdition(s, now = Date.now()) {
+  s.edition += 1;
+  s.flags.finished = false;
+  enterEra(s, 'scriptorium', now);
 }
 
 // ── Saving ─────────────────────────────────────────────────────────────────
@@ -315,46 +260,35 @@ export function hydrate(raw, now = Date.now()) {
   if (!(Number.isInteger(raw.v) && raw.v >= 1 && raw.v <= SAVE_VERSION)) throw new Error('This save is from another version of the game and cannot be loaded.');
   const s = newState(now);
   s.seed = Number.isInteger(raw.seed) ? raw.seed : s.seed;
-  s.ink = num(raw.ink);
-  s.fame = num(raw.fame);
-  for (const [id, l] of Object.entries(obj(raw.fameLv))) if (FAME_BY_ID[id]) s.fameLv[id] = Math.min(FAME_BY_ID[id].max, Math.floor(num(l)));
-  s.fameLv.pen = 1;
-  s.era = ERAS[raw.era] && eraUnlocked(s, raw.era) ? raw.era : 'scriptorium';
-  if (raw.v < SAVE_VERSION) {
-    // upgrades that no longer exist are sold back at what they cost: before version 4 the whole ink tree of this book
-    // (the new one starts empty), in version 4 only the helpers column; fame upgrades that are gone are sold back for fame
-    const price = (table, id, l, scale = 1) => {
-      const c = table[id];
-      let t = 0;
-      if (c) for (let i = 0; i < Math.floor(num(l)); i++) t += Math.ceil(c[0] * c[1] ** i * scale);
-      return t;
-    };
-    let back = 0;
-    for (const [id, l] of Object.entries(obj(raw.levels))) {
-      if (raw.v >= 4 && NODE_BY_ID[id]) s.levels[id] = Math.min(NODE_BY_ID[id].max, Math.floor(num(l)));
-      else back += price(OLD_COSTS[raw.v], id, l, ERAS[s.era].price);
-    }
-    // Loyal Helper's helper was free: don't pay it back (it was 'apprentice' before version 3)
-    if (num(obj(raw.fameLv).loyal) > 0) back = Math.max(0, back - price(OLD_COSTS[raw.v], raw.v < 3 ? 'apprentice' : 'helper1', 1, ERAS[s.era].price));
-    let fame = 0;
-    for (const [id, l] of Object.entries(obj(raw.fameLv))) fame += price(OLD_COSTS.fame, id, l);
-    s.ink += back;
-    s.fame += fame;
-    s.refund = { ink: back, fame }; // main.js tells the player once
+  if (raw.v < 6) {
+    // before the eras had their own trees and bosses (fame, publishing): you go on in the newest era you had opened,
+    // with the trophies of the eras before it, an empty tree and no ink. Records and stats stay.
+    const fameLv = obj(raw.fameLv);
+    const opened = ERA_IDS.filter((e, i) => i === 0 || num(fameLv[`era_${e}`]) > 0);
+    s.era = opened.at(-1);
+    for (const e of ERA_IDS.slice(0, eraIndex(s.era))) s.trophies[e] = true;
+    s.migrated = { era: s.era }; // main.js tells the player once
   } else {
-    for (const [id, l] of Object.entries(obj(raw.levels))) if (NODE_BY_ID[id]) s.levels[id] = Math.min(NODE_BY_ID[id].max, Math.floor(num(l)));
+    s.era = ERAS[raw.era] ? raw.era : 'scriptorium';
+    s.ink = num(raw.ink);
+    for (const [id, l] of Object.entries(obj(raw.levels))) if (NODE_BY_ID[id] && NODE_BY_ID[id].era === s.era) s.levels[id] = Math.min(1, Math.floor(num(l)));
+    for (const e of ERA_IDS) if (obj(raw.trophies)[e]) s.trophies[e] = true;
+    s.edition = Math.max(1, Math.floor(num(raw.edition, 1)));
+    const c = obj(raw.cycle);
+    s.cycle = { drafts: Math.floor(num(c.drafts)), ink: num(c.ink), started: num(c.started) || now, bestDraft: num(c.bestDraft), bossTries: Math.floor(num(c.bossTries)) };
+    for (const e of ERA_IDS) {
+      const b = obj(obj(raw.bosses)[e]);
+      s.bosses[e] = { wins: Math.floor(num(b.wins)), tries: Math.floor(num(b.tries)), bestT: num(b.bestT) };
+    }
   }
-  const c = obj(raw.cycle);
-  s.cycle = { drafts: Math.floor(num(c.drafts)), ink: num(c.ink), started: num(c.started) || now, chal: CHALLENGE_BY_ID[c.chal] ? c.chal : null, bestDraft: num(c.bestDraft) };
   s.drafts = Math.floor(num(raw.drafts));
-  s.publishes = Math.floor(num(raw.publishes));
-  for (const k of Object.keys(s.chal)) s.chal[k] = Math.floor(num(obj(raw.chal)[k]));
   for (const k of Object.keys(s.stats)) if (k in obj(raw.stats)) s.stats[k] = num(raw.stats[k]);
   for (const e of ERA_IDS) { const b = obj(obj(raw.best)[e]); s.best[e] = { wpm: num(b.wpm), ink: num(b.ink) }; }
   s.last = raw.last && typeof raw.last === 'object' ? { ...raw.last } : null;
   s.flags = { ...obj(raw.flags) };
   s.settings = { ...s.settings, ...obj(raw.settings) };
   s.settings.volume = Math.min(1, num(s.settings.volume, 0.7));
+  s.settings.music = Math.min(1, num(s.settings.music, 0.6));
   s.settings.words = Math.min(1.2, Math.max(0.85, num(s.settings.words, 1)));
   s.lastSave = num(raw.lastSave) || now;
   return s;

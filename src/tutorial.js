@@ -41,8 +41,8 @@ export class DraftTutorial {
       }
       case 'focus':
         return {
-          task: '↑ this bar is your <b>focus</b>',
-          why: 'it drains as time passes, and every mistake takes a bite.<br>when it runs out, the draft ends.',
+          task: '↑ this bar is your <b>candle</b>',
+          why: 'it burns down as time passes, and every mistake takes a bite.<br>when it goes out, the draft ends.',
           gate: `press ${keys(' ')} to start`,
           lit: 'focus',
           pulse: 'focus',
@@ -67,7 +67,7 @@ export class DraftTutorial {
       else if (this.step === 'finish' || this.step === 'more') this.say('not that key: type the letter in the box. a wrong key never moves you on.', true);
       else if (!this.mistakeSeen) {
         this.mistakeSeen = true;
-        this.ui.say({ why: 'a mistake breaks your <b>streak</b> (the thin bar) and costs focus.', pulse: 'streak', hide: 4 });
+        this.ui.say({ why: 'a mistake breaks your <b>streak</b> (the thin bar) and costs candle.', pulse: 'streak', hide: 4 });
       }
       return;
     }
@@ -162,7 +162,7 @@ export class EraTutorial {
         const tally = `<span class="tally">${[0, 1].map((i) => `<i${i < 2 - this.left ? ' class="on"' : ''}></i>`).join('')}</span>`;
         return { task: `catch these two ${tally}`, why: why || c.pairWhy, err, lit: 'none' };
       }
-      case 'bell': return { task: `the bell rang: press ${keys('Enter')}`, why: why || 'every 8 words the bell rings. hit Enter in time for a line bonus: more ink and focus.', err, lit: 'none' };
+      case 'bell': return { task: `the bell rang: press ${keys('Enter')}`, why: why || 'every 8 words the bell rings. hit Enter in time for a line bonus: more ink and ribbon.', err, lit: 'none' };
       case 'bug': return { task: 'watch the bug', why: why || 'bugs crawl into words and turn a letter into a symbol.', err, lit: 'none' };
       case 'bugged': {
         const w = this.bugged && this.run.words.find((x) => x.id === this.bugged);

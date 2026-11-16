@@ -13,27 +13,17 @@
       <section id="screen-title" class="screen" hidden></section>
       <section id="screen-tree" class="screen">
         <header class="topbar">
-          <nav class="tabs" id="tabs">
-            <button type="button" data-tab="ink" class="on">ink</button>
-            <button type="button" data-tab="fame" hidden>fame</button>
-            <button type="button" data-tab="chal" hidden>challenges</button>
-          </nav>
+          <div class="era-name" id="era-name"></div>
           <div class="wallet">
             <span class="chip ink" id="w-ink"></span>
-            <span class="chip fame" id="w-fame" hidden></span>
           </div>
           <button type="button" class="link" id="gear">settings</button>
         </header>
         <div id="tree-ink" class="tree"></div>
-        <div id="tree-fame" class="tree" hidden></div>
-        <div id="chal" class="chal" hidden></div>
         <div class="draft-cta"><button type="button" class="btn primary big" id="start"></button></div>
         <footer class="tree-foot">
           <div class="foot-mid">
             <p class="pub-hint" id="pub-hint"></p>
-          </div>
-          <div class="foot-actions">
-            <button type="button" class="btn ghost" id="publish" hidden></button>
           </div>
         </footer>
       </section>
@@ -56,14 +46,28 @@
         <p class="tut" id="tut" hidden></p>
         <p class="run-hint" id="run-hint" hidden></p>
         <p class="caps" id="caps" hidden>Caps Lock is on</p>
-        <div class="away" id="away" hidden><div class="box"><b>paused</b><span>press any key to go on</span></div></div>
         <div class="summary" id="summary" hidden>
           <canvas class="ink-end" id="ink-end"></canvas>
           <button type="button" class="btn ink-btn" id="to-tree"></button>
         </div>
       </section>
+
+      <section id="screen-boss" class="screen" hidden>
+        <canvas id="boss"></canvas>
+        <header class="boss-hud">
+          <div class="boss-top"><span class="boss-name" id="boss-name"></span><span class="boss-pages" id="boss-pages"></span></div>
+          <p class="boss-phase" id="boss-phase"></p>
+        </header>
+        <p class="boss-tip" id="boss-tip" hidden></p>
+        <footer class="boss-foot">
+          <div class="bar focus"><i id="boss-res"></i></div>
+          <div class="hud-sub"><span id="boss-res-label"></span><span id="boss-wpm"></span></div>
+        </footer>
+        <div class="boss-banner" id="boss-banner" hidden></div>
+      </section>
+      <div class="away" id="away" hidden><div class="box"><b>paused</b><span>press any key to go on</span></div></div>
     </div>
-    <div id="opus" class="opus" hidden></div>
+    <div id="scene" class="scene" hidden></div>
     <div id="tut-dim" class="tut-dim" hidden></div>
     <div id="tut-tip" class="tut-tip" hidden></div>
     <div id="toasts" class="toasts" aria-live="polite"></div>

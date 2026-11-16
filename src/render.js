@@ -81,7 +81,7 @@ export class FieldRenderer {
   setRun(run, era) {
     this.run = run;
     this.era = era;
-    this.theme = ERAS[era].theme;
+    this.theme = ERAS[era].page || ERAS[era].theme; // the colours of the page the words cross
     this.floats = [];
     this.letters = [];
     this.sparks = [];
@@ -152,7 +152,7 @@ export class FieldRenderer {
       this.float(x + 6, y - size * 1.05, `+${e.text_amount}`, color, big ? 1.35 : 1.05);
       if (e.focus > 0.05) this.float(x + 6, y - size * 1.9, `+${e.focus.toFixed(1)} s`, th.muted, 0.75);
       // a word that says what just happened (only for the special ones)
-      const label = e.kind === 'illum' ? 'Illuminated!' : e.gold ? 'Golden!' : e.bugged ? 'Debugged!' : e.faint ? 'Foresight ×2' : e.splash ? 'Splash!'
+      const label = e.nova ? 'Nova ×5' : e.carbon ? 'Carbon copy' : e.kind === 'illum' ? 'Illuminated!' : e.gold ? 'Golden!' : e.bugged ? 'Debugged!' : e.faint ? 'Faint ×' + run.st.faintMult : e.splash ? 'Splash!'
         : e.chain >= 3 ? `Chain ×${e.chain}` : e.perfect && e.long ? 'Perfect' : '';
       if (label) this.float(x + 6, y + size * 0.9, label, e.gold ? th.gold : e.chain >= 3 ? th.gold : th.typed, 0.95, true);
       const n = settings.calm ? 1 : e.gold ? 14 : e.kind === 'illum' ? 16 : 5;
@@ -169,6 +169,8 @@ export class FieldRenderer {
       if (settings.shake) this.shake(4, 0.15);
     } else if (e.type === 'splash') {
       this.splashes.push({ x0: this.wx(e.from.x), y0: this.ly(e.from.lane), x1: this.wx(e.to.x), y1: this.ly(e.to.lane), t: 0 });
+    } else if (e.type === 'page') {
+      this.callout('Full page ×2', th.gold, 1.05);
     } else if (e.type === 'zone') {
       this.zoneOn = true;
       this.callout('In the Zone', th.gold, 1.15);
@@ -258,14 +260,40 @@ export class FieldRenderer {
     const x1 = this.px0 + this.pw;
     ctx.globalAlpha = 1;
     if (era === 'scriptorium' || era === 'typewriter') {
-      // ruled lines under each lane, and a margin on the left
+      // ruled lines under each lane
       ctx.fillStyle = th.line;
       ctx.globalAlpha = 0.8;
       for (let l = 0; l < LANES; l++) ctx.fillRect(x0, Math.round(this.ly(l) + this.fontPx * 0.42), this.pw, 1);
       ctx.globalAlpha = 1;
-      ctx.fillStyle = th.line;
-      ctx.fillRect(Math.round(x0 + this.pw * 0.04), this.pageTop + 6, 1, this.pageBottom - this.pageTop - 12);
+    }
+    const mx = Math.round(x0 + this.pw * 0.04);
+    if (era === 'scriptorium') {
+      // the rubric: a double red margin, as in a manuscript
+      ctx.fillStyle = th.accent;
+      ctx.globalAlpha = 0.55;
+      ctx.fillRect(mx, this.pageTop + 6, 1, this.pageBottom - this.pageTop - 12);
+      ctx.fillRect(mx + 4, this.pageTop + 6, 1, this.pageBottom - this.pageTop - 12);
       ctx.globalAlpha = 1;
+    } else if (era === 'typewriter') {
+      ctx.fillStyle = th.line;
+      ctx.fillRect(mx, this.pageTop + 6, 1, this.pageBottom - this.pageTop - 12);
+      // the carriage on its rail (CSS draws the rail): it travels along the line until the bell
+      const run = this.run;
+      if (run && run.st.line) {
+        const k = run.line.bell > 0 ? 1 : Math.min(1, run.line.count / run.st.lineWords);
+        this.carriage = (this.carriage ?? k) + (k - (this.carriage ?? k)) * 0.2;
+        const cx = x0 + 10 + (this.pw - 50) * this.carriage;
+        ctx.fillStyle = '#B9BEC2';
+        ctx.fillRect(Math.round(cx), this.pageTop - 18, 30, 12);
+        ctx.fillStyle = '#6E7377';
+        ctx.fillRect(Math.round(cx + 13), this.pageTop - 6, 4, 6);
+      }
+    } else if (era === 'computer') {
+      // a faint line number gutter, like an editor
+      ctx.fillStyle = th.faint;
+      ctx.font = `12px ${this.font}`;
+      ctx.textBaseline = 'middle';
+      for (let l = 0; l < LANES; l++) ctx.fillText(String(l + 1).padStart(2, '0'), x0 + 4, this.ly(l));
     }
     void x1;
   }
@@ -486,6 +514,12 @@ export class FieldRenderer {
     ctx.fillStyle = th.muted;
     ctx.fillText(text, endX - w, y);
     ctx.restore();
+    if (this.era === 'computer') {
+      // the line you are writing is a prompt, with its block cursor
+      ctx.fillStyle = th.ink;
+      ctx.fillText('>', this.px0 + 4, y);
+      if (Math.floor(this.time * 2) % 2 === 0) ctx.fillRect(endX + 2, y - size * 0.8, size * 0.55, size);
+    }
     // letters of caught words: a short burst upwards, then they fly down to the end of the line
     for (const l of this.letters) {
       l.t += dt;
