@@ -1,0 +1,97 @@
+{
+  "name": "incrementalography",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "sim": "node sim/balance.mjs",
+    "humo": "node sim/humo.mjs",
+    "app": "vite build && electron .",
+    "icon": "electron scripts/make-icon.cjs",
+    "build:mac": "vite build && electron-builder --mac",
+    "build:win": "vite build && electron-builder --win",
+    "build:app": "vite build && electron-builder --mac --win",
+    "release": "bash scripts/release.sh",
+    "site": "vite site --port 5199"
+  },
+  "devDependencies": {
+    "@fontsource/courier-prime": "^5.3.0",
+    "@fontsource/eb-garamond": "^5.3.0",
+    "@fontsource/ibm-plex-mono": "^5.3.0",
+    "@fontsource/space-grotesk": "^5.3.0",
+    "@tabler/icons": "^3.31.0",
+    "electron": "^45.3.2",
+    "electron-builder": "^26.18.0",
+    "vite": "^8.3.5"
+  },
+  "productName": "Incrementalography",
+  "description": "A typing incremental: catch the words crossing the page and write your way through the eras of writing.",
+  "author": "Pepe",
+  "main": "electron/main.cjs",
+  "build": {
+    "appId": "com.pepe.incrementalography",
+    "productName": "Incrementalography",
+    "copyright": "Pepe",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "build/icon.png",
+      "package.json"
+    ],
+    "npmRebuild": false,
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64"
+          ]
+        }
+      ],
+      "category": "public.app-category.games",
+      "icon": "build/icon.png",
+      "identity": "-",
+      "hardenedRuntime": false,
+      "artifactName": "Incrementalography-Mac.${ext}"
+    },
+    "dmg": {
+      "artifactName": "Incrementalography-Mac.dmg",
+      "title": "Incrementalography"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "shortcutName": "Incrementalography",
+      "artifactName": "Incrementalography-Setup-Windows.exe"
+    },
+    "portable": {
+      "artifactName": "Incrementalography-Portable-Windows.exe"
+    }
+  }
+}

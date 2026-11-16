@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Incrementalography</title>
+    <meta name="description" content="A typing incremental: catch the words crossing the page and write your way through the eras of writing." />
+    <meta name="theme-color" content="#FFFFFF" />
+    <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+  </head>
+  <body>
+    <div id="app">
+      <section id="screen-title" class="screen" hidden></section>
+      <section id="screen-tree" class="screen">
+        <header class="topbar">
+          <nav class="tabs" id="tabs">
+            <button type="button" data-tab="ink" class="on">ink</button>
+            <button type="button" data-tab="fame" hidden>fame</button>
+            <button type="button" data-tab="chal" hidden>challenges</button>
+          </nav>
+          <div class="wallet">
+            <span class="chip ink" id="w-ink"></span>
+            <span class="chip fame" id="w-fame" hidden></span>
+          </div>
+          <button type="button" class="link" id="gear">settings</button>
+        </header>
+        <div id="tree-ink" class="tree"></div>
+        <div id="tree-fame" class="tree" hidden></div>
+        <div id="chal" class="chal" hidden></div>
+        <div class="draft-cta"><button type="button" class="btn primary big" id="start"></button></div>
+        <footer class="tree-foot">
+          <div class="foot-mid">
+            <p class="pub-hint" id="pub-hint"></p>
+          </div>
+          <div class="foot-actions">
+            <button type="button" class="btn ghost" id="publish" hidden></button>
+          </div>
+        </footer>
+      </section>
+
+      <section id="screen-run" class="screen" hidden>
+        <div class="page" id="page"></div>
+        <canvas id="run"></canvas>
+        <header class="run-hud">
+          <div class="hud-row">
+            <span class="hud-era" id="hud-era"></span>
+            <span class="hud-ink" id="hud-ink"></span>
+            <span class="hud-wpm" id="hud-wpm"></span>
+          </div>
+          <div class="hud-bars">
+            <div class="bar focus" title="Focus"><i id="focus-fill"></i></div>
+            <div class="bar streak" title="Streak"><i id="streak-fill"></i></div>
+            <div class="hud-sub"><span id="focus-label">focus</span><span id="streak-label"></span></div>
+          </div>
+        </header>
+        <p class="tut" id="tut" hidden></p>
+        <p class="run-hint" id="run-hint" hidden></p>
+        <p class="caps" id="caps" hidden>Caps Lock is on</p>
+        <div class="summary" id="summary" hidden>
+          <canvas class="ink-end" id="ink-end"></canvas>
+          <button type="button" class="btn ink-btn" id="to-tree"></button>
+        </div>
+      </section>
+    </div>
+    <div id="opus" class="opus" hidden></div>
+    <div id="tut-dim" class="tut-dim" hidden></div>
+    <div id="tut-tip" class="tut-tip" hidden></div>
+    <div id="toasts" class="toasts" aria-live="polite"></div>
+    <div id="modal-root"></div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
