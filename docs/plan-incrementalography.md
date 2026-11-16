@@ -361,4 +361,8 @@ Lo pediste porque las mejoras seguían costando de reconocer:
   - La partida se guarda en la carpeta de datos de la app.
   - F11 pone la pantalla completa.
 - **Página de descarga:** elegiste el concepto A, «escribe para descargar», entre tres maquetas. Está en `site/`, con capturas reales, las cuatro eras y los pasos para abrir la app sin firma.
-- **Sin publicar:** falta crear el repositorio, subir los instaladores a Releases y activar Pages. Se hará cuando lo pidas.
+- **Publicado el 16-11-2026:**
+  - Repositorio https://github.com/Pepe-a-d/incrementalography.
+  - Página https://pepe-a-d.github.io/incrementalography/, con el juego para el navegador en `/play/`.
+  - Instaladores en la release v1.0.0.
+  - Un push a main vuelve a publicar la página. Para una versión nueva: subir `version` en package.json y `npm run release`.
